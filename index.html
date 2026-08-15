@@ -120,6 +120,9 @@
   .list-line input{flex:1}
   .custom-field-row{display:grid;grid-template-columns:1.3fr .7fr 1fr auto;gap:8px;align-items:end;margin-bottom:9px}
   .tag-editor{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .check-grid{display:flex;gap:7px;flex-wrap:wrap;border:1px solid #cfd7df;border-radius:11px;padding:9px;min-height:44px;background:#fff}
+  .check-option{display:flex;align-items:center;gap:5px;background:#f2f6f9;border:1px solid var(--line);border-radius:999px;padding:6px 9px;font-size:12px;font-weight:700;cursor:pointer}
+  .check-option input{width:auto;margin:0;accent-color:var(--navy)}
   .tagpill{display:flex;align-items:center;gap:6px;background:#edf2f6;border-radius:999px;padding:6px 9px;font-size:12px}
   .tagpill button{border:0;background:transparent;color:var(--danger);font-weight:900;padding:0}
   dialog{border:0;border-radius:18px;padding:0;max-width:760px;width:calc(100% - 24px);box-shadow:0 25px 80px rgba(0,0,0,.28)}
@@ -211,13 +214,13 @@
     <div class="section-title">Aircraft & Model</div>
     <div class="form-grid">
       <div class="field span2"><label for="name">Model / Aircraft Name *</label><input id="name" required placeholder="e.g. De Havilland Canada DHC-2 Beaver"></div>
-      <div class="field"><label for="aircraftType">Aircraft Type</label><select id="aircraftType"></select></div>
+      <div class="field span2"><label>Aircraft Types — choose all that apply</label><div id="aircraftTypeChoices" class="check-grid"></div></div>
       <div class="field"><label for="aircraftManufacturer">Aircraft Manufacturer</label><input id="aircraftManufacturer" placeholder="e.g. de Havilland Canada"></div>
       <div class="field"><label for="country">Country of Origin</label><input id="country" list="countryList" placeholder="e.g. Canada"><datalist id="countryList"></datalist></div>
       <div class="field"><label for="era">Era</label><input id="era" placeholder="e.g. 1950s, WWII, Modern"></div>
       <div class="field"><label for="modelManufacturer">Model Manufacturer</label><select id="modelManufacturer"></select></div>
       <div class="field"><label for="scale">Scale</label><select id="scale"></select></div>
-      <div class="field"><label for="decalType">Decal / Marking Type</label><select id="decalType"></select></div>
+      <div class="field span2"><label>Decal / Marking Types — choose all that apply</label><div id="decalTypeChoices" class="check-grid"></div></div>
       <div class="field"><label for="registration">Registration / Tail Number</label><input id="registration" placeholder="e.g. CF-FHB"></div>
       <div class="field"><label for="operator">Airline / Operator / Unit</label><input id="operator" placeholder="e.g. RCAF, Air Canada, Inland Air"></div>
       <div class="field"><label for="condition">Condition</label><select id="condition"></select></div>
@@ -367,7 +370,7 @@
   </div>
 </section>
 </main>
-<footer class="app-footer">Model Aircraft Library · Version <span id="appVersion">13</span></footer>
+<footer class="app-footer">Model Aircraft Library · Version <span id="appVersion">14</span></footer>
 </div>
 
 <dialog id="detailDialog">
@@ -378,13 +381,13 @@
 <div id="toast" class="toast"></div>
 
 <script>
-const APP_VERSION='13';
+const APP_VERSION='14';
 const DB_NAME='ModelAircraftLibraryDB', DB_VERSION=1, MODEL_STORE='models', SETTINGS_STORE='settings';
 const SYNC_CONFIG_KEY='MAL_sync_config_v1', SYNC_SESSION_KEY='MAL_sync_session_v1';
 let db, models=[], settings, currentPhoto=null, syncTimer=null, syncBusy=false;
 
 const defaults={
-  types:['Airliner','Bush Plane','Fighter','Bomber','General Aviation','Helicopter','Jet','Propeller Aircraft','Seaplane / Floatplane','Transport','Trainer','Glider','Experimental','Other'],
+  types:['Airliner','Bush Plane','Fighter','Bomber','Military','General Aviation','Helicopter','Jet','Propeller Aircraft','Seaplane / Floatplane','Transport','Trainer','Glider','Experimental','Other'],
   scales:['1:18','1:24','1:32','1:48','1:72','1:100','1:144','1:200','1:250','1:400','1:500','1:700','Other'],
   modelManufacturers:['Airfix','Corgi','GeminiJets','Hasegawa','Herpa','Hobby Master','Inflight200','JC Wings','Matchbox','Minicraft','Revell','Tamiya','Witty Wings','Other'],
   decalTypes:['Factory / Original','Airline','Civil','Military','Custom','Historical','Special Livery','Unmarked','Other'],
@@ -479,6 +482,7 @@ async function loadSettings(){
   for(const k of ['types','scales','modelManufacturers','decalTypes','conditions','customFields']){
     if(!Array.isArray(settings[k])) settings[k]=[...defaults[k]];
   }
+  if(!settings._militaryTypeAdded){if(!settings.types.includes('Military'))settings.types.push('Military');settings._militaryTypeAdded=1}
   if(!settings._settingsTimestampFix){
     const listKeys=['types','scales','modelManufacturers','decalTypes','conditions'];
     const hasCustomContent=(settings.customFields||[]).length>0||listKeys.some(key=>(settings[key]||[]).some(value=>!(defaults[key]||[]).includes(value)));
@@ -628,6 +632,14 @@ function scheduleSync(){
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
 function money(n){return new Intl.NumberFormat('en-CA',{style:'currency',currency:settings.currency||'CAD',maximumFractionDigits:0}).format(Number(n)||0)}
 function qty(model){return Math.max(1,Math.floor(Number(model?.quantity)||1))}
+function aircraftTypes(model){
+  if(Array.isArray(model?.aircraftTypes))return model.aircraftTypes.filter(Boolean);
+  return model?.aircraftType?[model.aircraftType]:[];
+}
+function decalTypes(model){
+  if(Array.isArray(model?.decalTypes))return model.decalTypes.filter(Boolean);
+  return model?.decalType?[model.decalType]:[];
+}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
 function uid(){return (crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));}
 
@@ -656,11 +668,18 @@ function fillSelect(id,items,blank='— Select —',selected=''){
   if(current && !items.includes(current)) el.insertAdjacentHTML('beforeend',`<option value="${esc(current)}">${esc(current)}</option>`);
   el.value=current||'';
 }
+function renderMultiChoices(hostId,name,items,selected=[]){
+  const host=document.getElementById(hostId);if(!host)return;
+  const chosen=new Set(selected||[]);
+  host.innerHTML=items.map(value=>`<label class="check-option"><input type="checkbox" name="${name}" value="${esc(value)}" ${chosen.has(value)?'checked':''}> ${esc(value)}</label>`).join('');
+}
 function refreshFormLists(){
-  fillSelect('aircraftType',settings.types);
+  const selectedAircraft=[...document.querySelectorAll('input[name="aircraftTypes"]:checked')].map(input=>input.value);
+  const selectedDecals=[...document.querySelectorAll('input[name="decalTypes"]:checked')].map(input=>input.value);
+  renderMultiChoices('aircraftTypeChoices','aircraftTypes',settings.types,selectedAircraft);
+  renderMultiChoices('decalTypeChoices','decalTypes',settings.decalTypes,selectedDecals);
   fillSelect('scale',settings.scales);
   fillSelect('modelManufacturer',settings.modelManufacturers);
-  fillSelect('decalType',settings.decalTypes);
   fillSelect('condition',settings.conditions);
   document.getElementById('countryList').innerHTML=countries.map(x=>`<option value="${esc(x)}">`).join('');
   renderCustomFieldsForm();
@@ -717,16 +736,18 @@ document.getElementById('modelForm').addEventListener('submit',async e=>{
   const existing=models.find(m=>m.id===editId);
   const custom={};
   document.querySelectorAll('[data-custom]').forEach(el=>custom[el.dataset.custom]=el.value);
+  const selectedAircraftTypes=[...document.querySelectorAll('input[name="aircraftTypes"]:checked')].map(input=>input.value);
+  const selectedDecalTypes=[...document.querySelectorAll('input[name="decalTypes"]:checked')].map(input=>input.value);
   const now=new Date().toISOString();
   const obj={
     id:editId||uid(), name:document.getElementById('name').value.trim(),
-    aircraftType:document.getElementById('aircraftType').value,
+    aircraftTypes:selectedAircraftTypes,aircraftType:selectedAircraftTypes[0]||'',
     aircraftManufacturer:document.getElementById('aircraftManufacturer').value.trim(),
     country:document.getElementById('country').value.trim(),
     era:document.getElementById('era').value.trim(),
     modelManufacturer:document.getElementById('modelManufacturer').value,
     scale:document.getElementById('scale').value,
-    decalType:document.getElementById('decalType').value,
+    decalTypes:selectedDecalTypes,decalType:selectedDecalTypes[0]||'',
     registration:document.getElementById('registration').value.trim(),
     operator:document.getElementById('operator').value.trim(),
     condition:document.getElementById('condition').value,
@@ -755,15 +776,17 @@ function resetForm(){
   document.getElementById('formHeading').textContent='Add a Model';
   document.getElementById('saveBtn').textContent='Save Model';
   document.getElementById('cancelEditBtn').classList.add('hidden');
-  refreshFormLists();
+  renderMultiChoices('aircraftTypeChoices','aircraftTypes',settings.types,[]);renderMultiChoices('decalTypeChoices','decalTypes',settings.decalTypes,[]);refreshFormLists();
 }
 function cancelEdit(){resetForm();goPage('library')}
 function editModel(id){
   const m=models.find(x=>x.id===id);if(!m)return;
   refreshFormLists();
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v??''};
-  set('editId',m.id);set('name',m.name);set('aircraftType',m.aircraftType);set('aircraftManufacturer',m.aircraftManufacturer);
-  set('country',m.country);set('era',m.era);set('modelManufacturer',m.modelManufacturer);set('scale',m.scale);set('decalType',m.decalType);
+  set('editId',m.id);set('name',m.name);set('aircraftManufacturer',m.aircraftManufacturer);
+  set('country',m.country);set('era',m.era);set('modelManufacturer',m.modelManufacturer);set('scale',m.scale);
+  renderMultiChoices('aircraftTypeChoices','aircraftTypes',settings.types,aircraftTypes(m));
+  renderMultiChoices('decalTypeChoices','decalTypes',settings.decalTypes,decalTypes(m));
   set('registration',m.registration);set('operator',m.operator);set('condition',m.condition);set('quantity',qty(m));set('purchasePrice',m.purchasePrice||'');
   set('currentValue',m.currentValue||'');set('dateAcquired',m.dateAcquired);set('tags',(m.tags||[]).join(', '));set('notes',m.notes);
   currentPhoto=m.photo||null;renderPhoto();renderCustomFieldsForm(m.custom||{});
@@ -793,17 +816,17 @@ function renderDashboard(){
   document.getElementById('statValue').textContent=money(models.reduce((a,m)=>a+(Number(m.currentValue)||0)*qty(m),0));
   document.getElementById('statScales').textContent=new Set(models.map(m=>m.scale).filter(Boolean)).size;
   document.getElementById('statMfrs').textContent=new Set(models.map(m=>m.modelManufacturer).filter(Boolean)).size;
-  const counts={};models.forEach(m=>{const k=m.aircraftType||'Unspecified';counts[k]=(counts[k]||0)+qty(m)});
+  const counts={};models.forEach(m=>{const types=aircraftTypes(m);(types.length?types:['Unspecified']).forEach(type=>counts[type]=(counts[type]||0)+qty(m))});
   const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10),max=Math.max(1,...rows.map(r=>r[1]));
   document.getElementById('typeChart').innerHTML=rows.length?rows.map(([k,v])=>`<div class="chart-row"><span>${esc(k)}</span><div class="bar"><i style="width:${v/max*100}%"></i></div><b>${v}</b></div>`).join(''):'<div class="empty">Add your first model to see collection statistics.</div>';
   const recent=[...models].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,5);
-  document.getElementById('recentList').innerHTML=recent.length?recent.map(m=>`<div class="recent-item" onclick="showDetails('${m.id}')" style="cursor:pointer">${m.photo?`<img class="thumb" src="${m.photo}">`:`<div class="thumb" style="display:grid;place-items:center">✈️</div>`}<div><b>${esc(m.name)}${qty(m)>1?` ×${qty(m)}`:''}</b><small>${esc([m.scale,m.aircraftType].filter(Boolean).join(' • ')||'No classification')}</small></div></div>`).join(''):'<div class="empty">No models yet.</div>';
+  document.getElementById('recentList').innerHTML=recent.length?recent.map(m=>`<div class="recent-item" onclick="showDetails('${m.id}')" style="cursor:pointer">${m.photo?`<img class="thumb" src="${m.photo}">`:`<div class="thumb" style="display:grid;place-items:center">✈️</div>`}<div><b>${esc(m.name)}${qty(m)>1?` ×${qty(m)}`:''}</b><small>${esc([m.scale,...aircraftTypes(m)].filter(Boolean).join(' • ')||'No classification')}</small></div></div>`).join(''):'<div class="empty">No models yet.</div>';
 }
 function refreshFilters(){
   const val=id=>document.getElementById(id)?.value||'';
   const saved={type:val('filterType'),scale:val('filterScale'),country:val('filterCountry'),mfr:val('filterModelMfr'),tag:val('filterTag')};
   const uniq=f=>[...new Set(models.map(f).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
-  fillSelect('filterType',uniq(m=>m.aircraftType),'All aircraft types',saved.type);
+  fillSelect('filterType',[...new Set(models.flatMap(m=>aircraftTypes(m)))].sort(),'All aircraft types',saved.type);
   fillSelect('filterScale',uniq(m=>m.scale),'All scales',saved.scale);
   fillSelect('filterCountry',uniq(m=>m.country),'All countries',saved.country);
   fillSelect('filterModelMfr',uniq(m=>m.modelManufacturer),'All model makers',saved.mfr);
@@ -819,10 +842,10 @@ function filteredModels(){
   fScale=document.getElementById('filterScale').value,fCountry=document.getElementById('filterCountry').value,
   fMfr=document.getElementById('filterModelMfr').value,fTag=document.getElementById('filterTag').value,sort=document.getElementById('sortBy').value;
   let arr=models.filter(m=>{
-    if(fType&&m.aircraftType!==fType)return false;if(fScale&&m.scale!==fScale)return false;if(fCountry&&m.country!==fCountry)return false;
+    if(fType&&!aircraftTypes(m).includes(fType))return false;if(fScale&&m.scale!==fScale)return false;if(fCountry&&m.country!==fCountry)return false;
     if(fMfr&&m.modelManufacturer!==fMfr)return false;if(fTag&&!(m.tags||[]).includes(fTag))return false;
     if(q){
-      const hay=[m.name,m.aircraftType,m.aircraftManufacturer,m.country,m.modelManufacturer,m.scale,m.decalType,m.registration,m.operator,m.era,m.condition,m.notes,...(m.tags||[]),...Object.values(m.custom||{})].join(' ').toLowerCase();
+      const hay=[m.name,...aircraftTypes(m),m.aircraftManufacturer,m.country,m.modelManufacturer,m.scale,...decalTypes(m),m.registration,m.operator,m.era,m.condition,m.notes,...(m.tags||[]),...Object.values(m.custom||{})].join(' ').toLowerCase();
       if(!hay.includes(q))return false;
     } return true;
   });
@@ -849,7 +872,7 @@ function renderLibrary(){
       <div class="model-body">
         <div class="model-title">${esc(m.name)}${qty(m)>1?` <span class="chip">×${qty(m)}</span>`:''}</div>
         <div class="meta">${esc([m.aircraftManufacturer,m.country].filter(Boolean).join(' • '))}</div>
-        <div class="chips">${[m.aircraftType,m.scale,m.modelManufacturer,...(m.tags||[]).slice(0,2)].filter(Boolean).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>
+        <div class="chips">${[...aircraftTypes(m),...decalTypes(m),m.scale,m.modelManufacturer,...(m.tags||[]).slice(0,2)].filter(Boolean).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>
         <div class="model-foot">
           <span class="price">${m.currentValue?money(Number(m.currentValue)*qty(m)):''}${qty(m)>1&&m.currentValue?' total':''}</span>
           <div class="rowbuttons">
@@ -866,8 +889,8 @@ function showDetails(id){
   const m=models.find(x=>x.id===id);if(!m)return;
   document.getElementById('detailTitle').textContent=m.name;
   const pairs=[
-    ['Aircraft Type',m.aircraftType],['Aircraft Manufacturer',m.aircraftManufacturer],['Country of Origin',m.country],['Era',m.era],
-    ['Model Manufacturer',m.modelManufacturer],['Scale',m.scale],['Decal / Marking Type',m.decalType],['Registration',m.registration],
+    ['Aircraft Types',aircraftTypes(m).join(', ')],['Aircraft Manufacturer',m.aircraftManufacturer],['Country of Origin',m.country],['Era',m.era],
+    ['Model Manufacturer',m.modelManufacturer],['Scale',m.scale],['Decal / Marking Types',decalTypes(m).join(', ')],['Registration',m.registration],
     ['Airline / Operator / Unit',m.operator],['Condition',m.condition],['Quantity Owned',qty(m)],['Purchase Price (each)',m.purchasePrice?money(m.purchasePrice):''],
     ['Total Purchase Price',m.purchasePrice?money(Number(m.purchasePrice)*qty(m)):''],['Estimated Value (each)',m.currentValue?money(m.currentValue):''],
     ['Total Estimated Value',m.currentValue?money(Number(m.currentValue)*qty(m)):''],['Date Acquired',m.dateAcquired],['Tags',(m.tags||[]).join(', ')]
@@ -935,7 +958,7 @@ function exportCSV(){
   const customCols=settings.customFields.map(f=>f.name);
   const headers=['Name','Quantity','Aircraft Type','Aircraft Manufacturer','Country','Era','Model Manufacturer','Scale','Decal Type','Registration','Operator / Unit','Condition','Purchase Price Each','Total Purchase Price','Current Value Each','Total Current Value','Date Acquired','Tags','Notes',...customCols];
   const rows=models.map(m=>[
-    m.name,qty(m),m.aircraftType,m.aircraftManufacturer,m.country,m.era,m.modelManufacturer,m.scale,m.decalType,m.registration,m.operator,m.condition,
+    m.name,qty(m),aircraftTypes(m).join('; '),m.aircraftManufacturer,m.country,m.era,m.modelManufacturer,m.scale,decalTypes(m).join('; '),m.registration,m.operator,m.condition,
     m.purchasePrice,(Number(m.purchasePrice)||0)*qty(m),m.currentValue,(Number(m.currentValue)||0)*qty(m),m.dateAcquired,(m.tags||[]).join('; '),m.notes,...settings.customFields.map(f=>(m.custom||{})[f.id]||'')
   ]);
   const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');

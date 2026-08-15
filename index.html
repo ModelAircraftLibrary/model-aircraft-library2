@@ -546,19 +546,11 @@ function mergeSyncPayload(local,remote){
   return {version:2,settings:mergedSettings,models:mergedModels};
 }
 async function writeCloudPayload(config,userId,headers,payload){
-  const body={payload,updated_at:new Date().toISOString()};
-  let response=await fetch(`${config.url}/rest/v1/aircraft_library_sync?user_id=eq.${encodeURIComponent(userId)}&select=user_id`,{
-    method:'PATCH',headers:{...headers,Prefer:'return=representation'},body:JSON.stringify(body)
+  const response=await fetch(config.url+'/rest/v1/rpc/save_aircraft_library',{
+    method:'POST',headers,body:JSON.stringify({new_payload:payload})
   });
-  let result=await response.json().catch(()=>[]);
-  if(!response.ok)throw new Error(result.message||'Could not update cloud copy');
-  if(!Array.isArray(result)||!result.length){
-    response=await fetch(config.url+'/rest/v1/aircraft_library_sync?select=user_id',{
-      method:'POST',headers:{...headers,Prefer:'return=representation'},body:JSON.stringify({user_id:userId,...body})
-    });
-    result=await response.json().catch(()=>[]);
-    if(!response.ok)throw new Error(result.message||'Could not create cloud copy');
-  }
+  const result=await response.json().catch(()=>null);
+  if(!response.ok)throw new Error(result?.message||'Could not save cloud copy');
   const verify=await fetch(`${config.url}/rest/v1/aircraft_library_sync?select=payload,updated_at&user_id=eq.${encodeURIComponent(userId)}`,{headers});
   const rows=await verify.json().catch(()=>[]);if(!verify.ok)throw new Error(rows.message||'Could not verify cloud copy');
   if(!Array.isArray(rows)||!rows.length)throw new Error('Cloud verification found no row for this account');

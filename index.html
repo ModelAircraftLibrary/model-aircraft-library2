@@ -44,7 +44,7 @@
     white-space:nowrap;text-decoration:none;display:inline-block;-webkit-tap-highlight-color:transparent;touch-action:manipulation
   }
   nav a.active{background:#ffffff18;color:white}
-  main{width:min(1320px,100%);margin:0 auto;padding:22px 18px calc(42px + env(safe-area-inset-bottom))}
+  main{width:min(1320px,100%);margin:0 auto;padding:22px 18px calc(42px + env(safe-area-inset-bottom));flex:1}
   /* Without JavaScript (for example iOS Files/Quick Look), show all sections so the
      file is not trapped on the dashboard. With JS, restore normal app-style pages. */
   .page{display:block;margin-bottom:54px}
@@ -138,6 +138,7 @@
   .danger-zone{border:1px solid #efcaca;background:#fff8f8}
   .switch-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
   .muted{color:var(--muted)}
+  .app-footer{text-align:center;color:var(--muted);font-size:12px;padding:8px 12px 24px;letter-spacing:.2px}
   .sync-status{display:flex;align-items:center;gap:8px;font-size:13px;margin:12px 0}
   .sync-dot{width:10px;height:10px;border-radius:50%;background:#9aa5af;flex:0 0 auto}
   .sync-dot.ok{background:var(--ok)}.sync-dot.warn{background:var(--warn)}.sync-dot.bad{background:var(--danger)}
@@ -366,6 +367,7 @@
   </div>
 </section>
 </main>
+<footer class="app-footer">Model Aircraft Library · Version <span id="appVersion">13</span></footer>
 </div>
 
 <dialog id="detailDialog">
@@ -376,6 +378,7 @@
 <div id="toast" class="toast"></div>
 
 <script>
+const APP_VERSION='13';
 const DB_NAME='ModelAircraftLibraryDB', DB_VERSION=1, MODEL_STORE='models', SETTINGS_STORE='settings';
 const SYNC_CONFIG_KEY='MAL_sync_config_v1', SYNC_SESSION_KEY='MAL_sync_session_v1';
 let db, models=[], settings, currentPhoto=null, syncTimer=null, syncBusy=false;
@@ -947,6 +950,7 @@ async function deleteAllModels(){
 }
 
 (async function init(){
+  document.getElementById('appVersion').textContent=APP_VERSION;
   try{
     await openDB();
     storageMode='idb';

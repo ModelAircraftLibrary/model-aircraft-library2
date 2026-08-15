@@ -235,7 +235,12 @@
     <div class="form-grid">
       <div class="field span3">
         <div class="photo-box" id="photoBox"><div class="photo-placeholder">📷<br><b>Add a photo</b><br><small>Photos are resized automatically to save storage space.</small></div></div>
-        <input id="photoInput" type="file" accept="image/*" style="margin-top:8px">
+        <div class="actions" style="margin-top:8px">
+          <button type="button" class="btn primary" onclick="document.getElementById('cameraInput').click()">📷 Take Photo Now</button>
+          <button type="button" class="btn" onclick="document.getElementById('photoInput').click()">Choose Existing Photo</button>
+        </div>
+        <input class="hidden" id="cameraInput" type="file" accept="image/*" capture="environment">
+        <input class="hidden" id="photoInput" type="file" accept="image/*">
         <button type="button" class="btn small hidden" id="removePhotoBtn" onclick="removePhoto()">Remove Photo</button>
       </div>
     </div>
@@ -647,10 +652,13 @@ function renderCustomFieldsForm(values={}){
   });
 }
 
-document.getElementById('photoInput').addEventListener('change',async e=>{
+async function handlePhotoSelection(e){
   const file=e.target.files[0]; if(!file)return;
   try{currentPhoto=await resizeImage(file,1000,0.78);renderPhoto();}catch(err){toast('Could not read that image')}
-});
+  e.target.value='';
+}
+document.getElementById('photoInput').addEventListener('change',handlePhotoSelection);
+document.getElementById('cameraInput').addEventListener('change',handlePhotoSelection);
 function resizeImage(file,maxDim=1000,quality=.78){
   return new Promise((resolve,reject)=>{
     const reader=new FileReader();
@@ -673,7 +681,7 @@ function renderPhoto(){
   if(currentPhoto){box.innerHTML=`<img src="${currentPhoto}" alt="Model photo">`;btn.classList.remove('hidden')}
   else{box.innerHTML='<div class="photo-placeholder">📷<br><b>Add a photo</b><br><small>Photos are resized automatically to save storage space.</small></div>';btn.classList.add('hidden')}
 }
-function removePhoto(){currentPhoto=null;document.getElementById('photoInput').value='';renderPhoto()}
+function removePhoto(){currentPhoto=null;document.getElementById('photoInput').value='';document.getElementById('cameraInput').value='';renderPhoto()}
 
 document.getElementById('modelForm').addEventListener('submit',async e=>{
   e.preventDefault();

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'model-aircraft-library-v11';
+const CACHE_NAME = 'model-aircraft-library-v12';
 const APP_SHELL = [
   './',
   './index.html',

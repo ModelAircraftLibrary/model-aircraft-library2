@@ -476,7 +476,13 @@ async function loadSettings(){
   for(const k of ['types','scales','modelManufacturers','decalTypes','conditions','customFields']){
     if(!Array.isArray(settings[k])) settings[k]=[...defaults[k]];
   }
-  if(!saved)await saveSettings(true);
+  if(!settings._settingsTimestampFix){
+    const listKeys=['types','scales','modelManufacturers','decalTypes','conditions'];
+    const hasCustomContent=(settings.customFields||[]).length>0||listKeys.some(key=>(settings[key]||[]).some(value=>!(defaults[key]||[]).includes(value)));
+    settings._updatedAt=hasCustomContent?new Date().toISOString():'';
+    settings._settingsTimestampFix=1;
+  }
+  await storePut(SETTINGS_STORE,{key:'main',value:settings});
 }
 async function saveSettings(skipSync=false){
   settings._updatedAt=new Date().toISOString();
@@ -558,7 +564,9 @@ async function writeCloudPayload(config,userId,headers,payload){
 }
 async function persistSyncPayload(payload){
   await storeClear(MODEL_STORE);for(const model of payload.models||[])await storePut(MODEL_STORE,model);
-  settings={...defaults,...(payload.settings||{})};await saveSettings(true);models=await storeGetAll(MODEL_STORE);renderAll();
+  settings={...defaults,...(payload.settings||{})};
+  await storePut(SETTINGS_STORE,{key:'main',value:settings});
+  models=await storeGetAll(MODEL_STORE);renderAll();
 }
 async function syncNow(showResult=false,pullOnly=false){
   if(syncBusy||!navigator.onLine)return;const auth=await validSyncSession().catch(()=>null);if(!auth){renderSyncUI();return}

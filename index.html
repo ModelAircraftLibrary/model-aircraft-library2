@@ -557,7 +557,8 @@ async function syncNow(showResult=false){
     if(rows.length)await persistSyncPayload(merged);
     const put=await fetch(config.url+'/rest/v1/aircraft_library_sync',{method:'POST',headers:{...headers,Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:userId,payload:merged,updated_at:new Date().toISOString()})});
     if(!put.ok)throw new Error((await put.json().catch(()=>({}))).message||'Could not save synced collection');
-    const when=new Date();localStorage.setItem('MAL_last_sync',when.toISOString());setSyncState(`Synced ${merged.models.length} model${merged.models.length===1?'':'s'} as ${config.email}`,'ok');
+    const syncedQty=(merged.models||[]).reduce((total,model)=>total+qty(model),0);
+    const when=new Date();localStorage.setItem('MAL_last_sync',when.toISOString());setSyncState(`Synced ${syncedQty} model${syncedQty===1?'':'s'} as ${config.email}`,'ok');
     document.getElementById('syncLast').textContent='Last synced '+when.toLocaleString();if(showResult)toast('Collection synced');
   }catch(err){console.error(err);setSyncState('Sync error — local copy is safe','bad');if(showResult)alert('Sync failed: '+err.message)}finally{syncBusy=false}
 }
@@ -573,19 +574,20 @@ async function downloadCloudCopy(){
     const response=await fetch(`${config.url}/rest/v1/aircraft_library_sync?select=payload,updated_at&user_id=eq.${encodeURIComponent(userId)}`,{headers});
     if(!response.ok)throw new Error((await response.json().catch(()=>({}))).message||'Could not read cloud copy');
     const rows=await response.json();if(!rows.length)throw new Error('No cloud copy was found for this signed-in account');
-    const payload=rows[0].payload||{},count=Array.isArray(payload.models)?payload.models.length:0;
+    const payload=rows[0].payload||{},count=(payload.models||[]).reduce((total,model)=>total+qty(model),0);
     if(!confirm(`Download ${count} model${count===1?'':'s'} from the cloud and replace this device's local collection?`)){renderSyncUI();return}
     await persistSyncPayload(payload);setSyncState(`Downloaded ${count} model${count===1?'':'s'} from cloud`,'ok');toast(`Downloaded ${count} cloud model${count===1?'':'s'}`);goPage('dashboard');
   }catch(err){setSyncState('Cloud download failed','bad');alert('Download failed: '+err.message)}
 }
 async function uploadLocalCopy(){
   if(!navigator.onLine){toast('Connect to the internet first');return}
-  if(!confirm(`Replace the cloud copy with the ${models.length} model${models.length===1?'':'s'} stored on this device?`))return;
+  const localQty=models.reduce((total,model)=>total+qty(model),0);
+  if(!confirm(`Replace the cloud copy with the ${localQty} model${localQty===1?'':'s'} stored on this device?`))return;
   try{
     setSyncState('Uploading this device…','warn');const {config,userId,headers}=await syncApi();
     const payload={version:2,settings,models},response=await fetch(config.url+'/rest/v1/aircraft_library_sync',{method:'POST',headers:{...headers,Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:userId,payload,updated_at:new Date().toISOString()})});
     if(!response.ok)throw new Error((await response.json().catch(()=>({}))).message||'Could not upload local copy');
-    setSyncState(`Uploaded ${models.length} model${models.length===1?'':'s'} to cloud`,'ok');toast('This device was uploaded');
+    setSyncState(`Uploaded ${localQty} model${localQty===1?'':'s'} to cloud`,'ok');toast('This device was uploaded');
   }catch(err){setSyncState('Cloud upload failed','bad');alert('Upload failed: '+err.message)}
 }
 function scheduleSync(){clearTimeout(syncTimer);if(getSyncSession()&&navigator.onLine)syncTimer=setTimeout(()=>syncNow(false),1200)}
@@ -740,6 +742,14 @@ async function deleteModel(id){
   settings._deletedModels=settings._deletedModels||{};settings._deletedModels[id]=new Date().toISOString();
   await storeDelete(MODEL_STORE,id);await saveSettings(true);await loadModels();scheduleSync();toast('Model deleted');
 }
+async function addCopy(id){
+  const model=models.find(x=>x.id===id);if(!model)return;
+  const updated={...model,quantity:qty(model)+1,updatedAt:new Date().toISOString()};
+  settings._deletedModels=settings._deletedModels||{};delete settings._deletedModels[id];
+  await storePut(MODEL_STORE,updated);await saveSettings(true);await loadModels();
+  setSyncState('Extra copy saved — syncing…','warn');scheduleSync();
+  toast(`${updated.name}: quantity is now ${updated.quantity}`);
+}
 
 function renderAll(){refreshFormLists();renderDashboard();refreshFilters();renderLibrary();renderSettings()}
 function renderDashboard(){
@@ -809,6 +819,7 @@ function renderLibrary(){
           <div class="rowbuttons">
             <button class="btn small" onclick="showDetails('${m.id}')">View</button>
             <button class="btn small" onclick="editModel('${m.id}')">Edit</button>
+            <button class="btn small secondary" onclick="addCopy('${m.id}')">+ Copy</button>
             <button class="btn small danger" onclick="deleteModel('${m.id}')">Delete</button>
           </div>
         </div>
@@ -830,7 +841,7 @@ function showDetails(id){
   body.innerHTML=`${m.photo?`<img src="${m.photo}" alt="${esc(m.name)}" style="width:100%;max-height:380px;object-fit:contain;background:#f1f4f7;border-radius:12px;margin-bottom:14px">`:''}
     <div class="detail-grid">${pairs.filter(x=>x[1]!==''&&x[1]!=null).map(([a,b])=>`<div><b>${esc(a)}</b>${esc(b)}</div>`).join('')}</div>
     ${m.notes?`<div style="margin-top:16px"><b>Notes</b><p style="white-space:pre-wrap">${esc(m.notes)}</p></div>`:''}
-    <div class="actions" style="margin-top:18px"><button class="btn primary" onclick="document.getElementById('detailDialog').close();editModel('${m.id}')">Edit</button><button class="btn danger" onclick="document.getElementById('detailDialog').close();deleteModel('${m.id}')">Delete</button></div>`;
+    <div class="actions" style="margin-top:18px"><button class="btn primary" onclick="document.getElementById('detailDialog').close();editModel('${m.id}')">Edit</button><button class="btn secondary" onclick="document.getElementById('detailDialog').close();addCopy('${m.id}')">+ Add Another Copy</button><button class="btn danger" onclick="document.getElementById('detailDialog').close();deleteModel('${m.id}')">Delete</button></div>`;
   document.getElementById('detailDialog').showModal();
 }
 

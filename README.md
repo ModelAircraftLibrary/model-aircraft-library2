@@ -22,7 +22,7 @@ A password gate added directly to GitHub Pages would not be secure because its c
 2. Paste the same Project URL and publishable/anon key, enter an email and a strong password, then choose **Create Account**.
 3. If email confirmation is enabled, open the confirmation email and then return to the app and choose **Sign In**.
 4. On the second device, enter the same Project URL, key, email, and password, then choose **Sign In**.
-5. Use **Sync Now** once on each device. After that, saves, edits, deletes, imported backups, and field changes sync automatically. The app also syncs when it returns online or becomes active.
+5. Use **Sync Now** once on each device. After that, saves, edits, deletes, imported backups, and field changes sync automatically. A visible app checks for incoming changes about every 15 seconds and also syncs when it returns online or becomes active.
 
 If both devices change the same model while offline, the most recently edited version wins. Changes to different models are merged. Deleted models are tracked so they are also removed from the other device.
 

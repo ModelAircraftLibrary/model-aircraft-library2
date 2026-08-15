@@ -224,8 +224,9 @@
 
     <div class="section-title" style="margin-top:20px">Collection Details</div>
     <div class="form-grid">
-      <div class="field"><label for="purchasePrice">Purchase Price</label><input id="purchasePrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
-      <div class="field"><label for="currentValue">Estimated Current Value</label><input id="currentValue" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label for="quantity">Quantity Owned</label><input id="quantity" type="number" min="1" step="1" inputmode="numeric" value="1"></div>
+      <div class="field"><label for="purchasePrice">Purchase Price (each)</label><input id="purchasePrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label for="currentValue">Estimated Current Value (each)</label><input id="currentValue" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
       <div class="field"><label for="dateAcquired">Date Acquired</label><input id="dateAcquired" type="date"></div>
       <div class="field span3"><label for="tags">Tags</label><input id="tags" placeholder="Separate tags with commas — e.g. floatplane, Canadian, favourite, rare"><div class="help">Tags are searchable and can be used as a library filter.</div></div>
     </div>
@@ -314,7 +315,7 @@
 
     <div class="card">
       <h3>iPhone & iPad Sync</h3>
-      <p class="muted" style="font-size:13px">Sign in with the same account on both devices. Changes stay saved locally while offline and sync when an internet connection returns.</p>
+      <p class="muted" style="font-size:13px">Sign in with the same account on both devices. Changes save locally while offline and visible devices check for updates about every 15 seconds.</p>
       <div class="sync-status"><span id="syncDot" class="sync-dot"></span><span id="syncStatus">Sync is not configured</span></div>
       <div id="syncSetup" class="sync-fields">
         <div class="field"><label>Supabase Project URL</label><input id="syncUrl" type="url" inputmode="url" placeholder="https://your-project.supabase.co"></div>
@@ -556,7 +557,7 @@ async function syncNow(showResult=false){
     if(rows.length)await persistSyncPayload(merged);
     const put=await fetch(config.url+'/rest/v1/aircraft_library_sync',{method:'POST',headers:{...headers,Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:userId,payload:merged,updated_at:new Date().toISOString()})});
     if(!put.ok)throw new Error((await put.json().catch(()=>({}))).message||'Could not save synced collection');
-    const when=new Date();localStorage.setItem('MAL_last_sync',when.toISOString());setSyncState(`Synced as ${config.email}`,'ok');
+    const when=new Date();localStorage.setItem('MAL_last_sync',when.toISOString());setSyncState(`Synced ${merged.models.length} model${merged.models.length===1?'':'s'} as ${config.email}`,'ok');
     document.getElementById('syncLast').textContent='Last synced '+when.toLocaleString();if(showResult)toast('Collection synced');
   }catch(err){console.error(err);setSyncState('Sync error — local copy is safe','bad');if(showResult)alert('Sync failed: '+err.message)}finally{syncBusy=false}
 }
@@ -591,6 +592,7 @@ function scheduleSync(){clearTimeout(syncTimer);if(getSyncSession()&&navigator.o
 
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
 function money(n){return new Intl.NumberFormat('en-CA',{style:'currency',currency:settings.currency||'CAD',maximumFractionDigits:0}).format(Number(n)||0)}
+function qty(model){return Math.max(1,Math.floor(Number(model?.quantity)||1))}
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
 function uid(){return (crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));}
 
@@ -690,6 +692,7 @@ document.getElementById('modelForm').addEventListener('submit',async e=>{
     registration:document.getElementById('registration').value.trim(),
     operator:document.getElementById('operator').value.trim(),
     condition:document.getElementById('condition').value,
+    quantity:Math.max(1,Math.floor(Number(document.getElementById('quantity').value)||1)),
     purchasePrice:Number(document.getElementById('purchasePrice').value)||0,
     currentValue:Number(document.getElementById('currentValue').value)||0,
     dateAcquired:document.getElementById('dateAcquired').value,
@@ -710,6 +713,7 @@ document.getElementById('modelForm').addEventListener('submit',async e=>{
 });
 function resetForm(){
   document.getElementById('modelForm').reset();document.getElementById('editId').value='';currentPhoto=null;renderPhoto();
+  document.getElementById('quantity').value='1';
   document.getElementById('formHeading').textContent='Add a Model';
   document.getElementById('saveBtn').textContent='Save Model';
   document.getElementById('cancelEditBtn').classList.add('hidden');
@@ -722,7 +726,7 @@ function editModel(id){
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v??''};
   set('editId',m.id);set('name',m.name);set('aircraftType',m.aircraftType);set('aircraftManufacturer',m.aircraftManufacturer);
   set('country',m.country);set('era',m.era);set('modelManufacturer',m.modelManufacturer);set('scale',m.scale);set('decalType',m.decalType);
-  set('registration',m.registration);set('operator',m.operator);set('condition',m.condition);set('purchasePrice',m.purchasePrice||'');
+  set('registration',m.registration);set('operator',m.operator);set('condition',m.condition);set('quantity',qty(m));set('purchasePrice',m.purchasePrice||'');
   set('currentValue',m.currentValue||'');set('dateAcquired',m.dateAcquired);set('tags',(m.tags||[]).join(', '));set('notes',m.notes);
   currentPhoto=m.photo||null;renderPhoto();renderCustomFieldsForm(m.custom||{});
   document.getElementById('formHeading').textContent='Edit Model';
@@ -739,15 +743,15 @@ async function deleteModel(id){
 
 function renderAll(){refreshFormLists();renderDashboard();refreshFilters();renderLibrary();renderSettings()}
 function renderDashboard(){
-  document.getElementById('statCount').textContent=models.length.toLocaleString();
-  document.getElementById('statValue').textContent=money(models.reduce((a,m)=>a+(Number(m.currentValue)||0),0));
+  document.getElementById('statCount').textContent=models.reduce((a,m)=>a+qty(m),0).toLocaleString();
+  document.getElementById('statValue').textContent=money(models.reduce((a,m)=>a+(Number(m.currentValue)||0)*qty(m),0));
   document.getElementById('statScales').textContent=new Set(models.map(m=>m.scale).filter(Boolean)).size;
   document.getElementById('statMfrs').textContent=new Set(models.map(m=>m.modelManufacturer).filter(Boolean)).size;
-  const counts={};models.forEach(m=>{const k=m.aircraftType||'Unspecified';counts[k]=(counts[k]||0)+1});
+  const counts={};models.forEach(m=>{const k=m.aircraftType||'Unspecified';counts[k]=(counts[k]||0)+qty(m)});
   const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10),max=Math.max(1,...rows.map(r=>r[1]));
   document.getElementById('typeChart').innerHTML=rows.length?rows.map(([k,v])=>`<div class="chart-row"><span>${esc(k)}</span><div class="bar"><i style="width:${v/max*100}%"></i></div><b>${v}</b></div>`).join(''):'<div class="empty">Add your first model to see collection statistics.</div>';
   const recent=[...models].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,5);
-  document.getElementById('recentList').innerHTML=recent.length?recent.map(m=>`<div class="recent-item" onclick="showDetails('${m.id}')" style="cursor:pointer">${m.photo?`<img class="thumb" src="${m.photo}">`:`<div class="thumb" style="display:grid;place-items:center">✈️</div>`}<div><b>${esc(m.name)}</b><small>${esc([m.scale,m.aircraftType].filter(Boolean).join(' • ')||'No classification')}</small></div></div>`).join(''):'<div class="empty">No models yet.</div>';
+  document.getElementById('recentList').innerHTML=recent.length?recent.map(m=>`<div class="recent-item" onclick="showDetails('${m.id}')" style="cursor:pointer">${m.photo?`<img class="thumb" src="${m.photo}">`:`<div class="thumb" style="display:grid;place-items:center">✈️</div>`}<div><b>${esc(m.name)}${qty(m)>1?` ×${qty(m)}`:''}</b><small>${esc([m.scale,m.aircraftType].filter(Boolean).join(' • ')||'No classification')}</small></div></div>`).join(''):'<div class="empty">No models yet.</div>';
 }
 function refreshFilters(){
   const val=id=>document.getElementById(id)?.value||'';
@@ -788,22 +792,24 @@ function filteredModels(){
 }
 function renderLibrary(){
   const arr=filteredModels();
-  document.getElementById('libraryCount').textContent=`Showing ${arr.length} of ${models.length} model${models.length===1?'':'s'}`;
-  document.getElementById('libraryValue').textContent=arr.length?`Visible value: ${money(arr.reduce((a,m)=>a+(Number(m.currentValue)||0),0))}`:'';
+  const visibleQty=arr.reduce((a,m)=>a+qty(m),0),totalQty=models.reduce((a,m)=>a+qty(m),0);
+  document.getElementById('libraryCount').textContent=`Showing ${visibleQty} of ${totalQty} model${totalQty===1?'':'s'} (${arr.length} ${arr.length===1?'entry':'entries'})`;
+  document.getElementById('libraryValue').textContent=arr.length?`Visible value: ${money(arr.reduce((a,m)=>a+(Number(m.currentValue)||0)*qty(m),0))}`:'';
   const grid=document.getElementById('modelsGrid');
   if(!arr.length){grid.innerHTML='<div class="card empty" style="grid-column:1/-1">No models match your filters.</div>';return}
   grid.innerHTML=arr.map(m=>`
     <article class="model-card">
       ${m.photo?`<img class="model-img" src="${m.photo}" alt="${esc(m.name)}">`:`<div class="model-img-placeholder">✈️</div>`}
       <div class="model-body">
-        <div class="model-title">${esc(m.name)}</div>
+        <div class="model-title">${esc(m.name)}${qty(m)>1?` <span class="chip">×${qty(m)}</span>`:''}</div>
         <div class="meta">${esc([m.aircraftManufacturer,m.country].filter(Boolean).join(' • '))}</div>
         <div class="chips">${[m.aircraftType,m.scale,m.modelManufacturer,...(m.tags||[]).slice(0,2)].filter(Boolean).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>
         <div class="model-foot">
-          <span class="price">${m.currentValue?money(m.currentValue):''}</span>
+          <span class="price">${m.currentValue?money(Number(m.currentValue)*qty(m)):''}${qty(m)>1&&m.currentValue?' total':''}</span>
           <div class="rowbuttons">
             <button class="btn small" onclick="showDetails('${m.id}')">View</button>
             <button class="btn small" onclick="editModel('${m.id}')">Edit</button>
+            <button class="btn small danger" onclick="deleteModel('${m.id}')">Delete</button>
           </div>
         </div>
       </div>
@@ -815,8 +821,9 @@ function showDetails(id){
   const pairs=[
     ['Aircraft Type',m.aircraftType],['Aircraft Manufacturer',m.aircraftManufacturer],['Country of Origin',m.country],['Era',m.era],
     ['Model Manufacturer',m.modelManufacturer],['Scale',m.scale],['Decal / Marking Type',m.decalType],['Registration',m.registration],
-    ['Airline / Operator / Unit',m.operator],['Condition',m.condition],['Purchase Price',m.purchasePrice?money(m.purchasePrice):''],
-    ['Estimated Value',m.currentValue?money(m.currentValue):''],['Date Acquired',m.dateAcquired],['Tags',(m.tags||[]).join(', ')]
+    ['Airline / Operator / Unit',m.operator],['Condition',m.condition],['Quantity Owned',qty(m)],['Purchase Price (each)',m.purchasePrice?money(m.purchasePrice):''],
+    ['Total Purchase Price',m.purchasePrice?money(Number(m.purchasePrice)*qty(m)):''],['Estimated Value (each)',m.currentValue?money(m.currentValue):''],
+    ['Total Estimated Value',m.currentValue?money(Number(m.currentValue)*qty(m)):''],['Date Acquired',m.dateAcquired],['Tags',(m.tags||[]).join(', ')]
   ];
   settings.customFields.forEach(f=>pairs.push([f.name,(m.custom||{})[f.id]||'']));
   const body=document.getElementById('detailBody');
@@ -879,10 +886,10 @@ document.getElementById('importFile').addEventListener('change',async e=>{
 });
 function exportCSV(){
   const customCols=settings.customFields.map(f=>f.name);
-  const headers=['Name','Aircraft Type','Aircraft Manufacturer','Country','Era','Model Manufacturer','Scale','Decal Type','Registration','Operator / Unit','Condition','Purchase Price','Current Value','Date Acquired','Tags','Notes',...customCols];
+  const headers=['Name','Quantity','Aircraft Type','Aircraft Manufacturer','Country','Era','Model Manufacturer','Scale','Decal Type','Registration','Operator / Unit','Condition','Purchase Price Each','Total Purchase Price','Current Value Each','Total Current Value','Date Acquired','Tags','Notes',...customCols];
   const rows=models.map(m=>[
-    m.name,m.aircraftType,m.aircraftManufacturer,m.country,m.era,m.modelManufacturer,m.scale,m.decalType,m.registration,m.operator,m.condition,
-    m.purchasePrice,m.currentValue,m.dateAcquired,(m.tags||[]).join('; '),m.notes,...settings.customFields.map(f=>(m.custom||{})[f.id]||'')
+    m.name,qty(m),m.aircraftType,m.aircraftManufacturer,m.country,m.era,m.modelManufacturer,m.scale,m.decalType,m.registration,m.operator,m.condition,
+    m.purchasePrice,(Number(m.purchasePrice)||0)*qty(m),m.currentValue,(Number(m.currentValue)||0)*qty(m),m.dateAcquired,(m.tags||[]).join('; '),m.notes,...settings.customFields.map(f=>(m.custom||{})[f.id]||'')
   ]);
   const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
   downloadBlob(csv,'text/csv;charset=utf-8',`model-aircraft-collection-${new Date().toISOString().slice(0,10)}.csv`);
@@ -924,6 +931,7 @@ async function deleteAllModels(){
     window.addEventListener('online',()=>{renderSyncUI();syncNow(false)});
     window.addEventListener('offline',renderSyncUI);
     document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow(false)});
+    setInterval(()=>{if(document.visibilityState==='visible'&&navigator.onLine&&getSyncSession())syncNow(false)},15000);
     if(getSyncSession()&&navigator.onLine)syncNow(false);
   }catch(err){
     console.error(err);

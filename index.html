@@ -545,6 +545,25 @@ function mergeSyncPayload(local,remote){
   mergedSettings._deletedModels=deleted;
   return {version:2,settings:mergedSettings,models:mergedModels};
 }
+async function writeCloudPayload(config,userId,headers,payload){
+  const body={payload,updated_at:new Date().toISOString()};
+  let response=await fetch(`${config.url}/rest/v1/aircraft_library_sync?user_id=eq.${encodeURIComponent(userId)}&select=user_id`,{
+    method:'PATCH',headers:{...headers,Prefer:'return=representation'},body:JSON.stringify(body)
+  });
+  let result=await response.json().catch(()=>[]);
+  if(!response.ok)throw new Error(result.message||'Could not update cloud copy');
+  if(!Array.isArray(result)||!result.length){
+    response=await fetch(config.url+'/rest/v1/aircraft_library_sync?select=user_id',{
+      method:'POST',headers:{...headers,Prefer:'return=representation'},body:JSON.stringify({user_id:userId,...body})
+    });
+    result=await response.json().catch(()=>[]);
+    if(!response.ok)throw new Error(result.message||'Could not create cloud copy');
+  }
+  const verify=await fetch(`${config.url}/rest/v1/aircraft_library_sync?select=payload,updated_at&user_id=eq.${encodeURIComponent(userId)}`,{headers});
+  const rows=await verify.json().catch(()=>[]);if(!verify.ok)throw new Error(rows.message||'Could not verify cloud copy');
+  if(!Array.isArray(rows)||!rows.length)throw new Error('Cloud verification found no row for this account');
+  return rows[0];
+}
 async function persistSyncPayload(payload){
   await storeClear(MODEL_STORE);for(const model of payload.models||[])await storePut(MODEL_STORE,model);
   settings={...defaults,...(payload.settings||{})};await saveSettings(true);models=await storeGetAll(MODEL_STORE);renderAll();
@@ -560,8 +579,7 @@ async function syncNow(showResult=false){
     const rows=await get.json(),local={version:2,settings,models};
     const merged=rows.length?mergeSyncPayload(local,rows[0].payload||{}):local;
     if(rows.length)await persistSyncPayload(merged);
-    const put=await fetch(config.url+'/rest/v1/aircraft_library_sync',{method:'POST',headers:{...headers,Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:userId,payload:merged,updated_at:new Date().toISOString()})});
-    if(!put.ok)throw new Error((await put.json().catch(()=>({}))).message||'Could not save synced collection');
+    await writeCloudPayload(config,userId,headers,merged);
     const syncedQty=(merged.models||[]).reduce((total,model)=>total+qty(model),0);
     const when=new Date();localStorage.setItem('MAL_last_sync',when.toISOString());setSyncState(`Synced ${syncedQty} model${syncedQty===1?'':'s'} as ${config.email}`,'ok');
     document.getElementById('syncLast').textContent='Last synced '+when.toLocaleString();if(showResult)toast('Collection synced');
@@ -590,9 +608,10 @@ async function uploadLocalCopy(){
   if(!confirm(`Replace the cloud copy with the ${localQty} model${localQty===1?'':'s'} stored on this device?`))return;
   try{
     setSyncState('Uploading this device…','warn');const {config,userId,headers}=await syncApi();
-    const payload={version:2,settings,models},response=await fetch(config.url+'/rest/v1/aircraft_library_sync',{method:'POST',headers:{...headers,Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:userId,payload,updated_at:new Date().toISOString()})});
-    if(!response.ok)throw new Error((await response.json().catch(()=>({}))).message||'Could not upload local copy');
-    setSyncState(`Uploaded ${localQty} model${localQty===1?'':'s'} to cloud`,'ok');toast('This device was uploaded');
+    const payload={version:2,settings,models},saved=await writeCloudPayload(config,userId,headers,payload);
+    const verifiedQty=(saved.payload?.models||[]).reduce((total,model)=>total+qty(model),0);
+    if(verifiedQty!==localQty)throw new Error(`Cloud verification expected ${localQty} models but read back ${verifiedQty}`);
+    setSyncState(`Verified ${verifiedQty} model${verifiedQty===1?'':'s'} in cloud`,'ok');toast('Cloud upload verified');
   }catch(err){setSyncState('Cloud upload failed','bad');alert('Upload failed: '+err.message)}
 }
 function scheduleSync(){clearTimeout(syncTimer);if(getSyncSession()&&navigator.onLine)syncTimer=setTimeout(()=>syncNow(false),1200)}

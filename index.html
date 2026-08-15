@@ -8,8 +8,8 @@
 <meta name="theme-color" content="#0f2742">
 <title>Model Aircraft Library</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="apple-touch-icon" href="icons/icon-180.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <meta name="apple-mobile-web-app-title" content="Aircraft Library">
 <meta name="mobile-web-app-capable" content="yes">
 
@@ -138,6 +138,10 @@
   .danger-zone{border:1px solid #efcaca;background:#fff8f8}
   .switch-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
   .muted{color:var(--muted)}
+  .sync-status{display:flex;align-items:center;gap:8px;font-size:13px;margin:12px 0}
+  .sync-dot{width:10px;height:10px;border-radius:50%;background:#9aa5af;flex:0 0 auto}
+  .sync-dot.ok{background:var(--ok)}.sync-dot.warn{background:var(--warn)}.sync-dot.bad{background:var(--danger)}
+  .sync-fields{display:grid;gap:10px}.sync-fields .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .hidden{display:none!important}
   @media (max-width:1050px){.models{grid-template-columns:repeat(3,1fr)}.filters{grid-template-columns:2fr repeat(3,1fr)}.filters .optional{display:none}}
   @media (max-width:820px){
@@ -309,6 +313,31 @@
     </div>
 
     <div class="card">
+      <h3>iPhone & iPad Sync</h3>
+      <p class="muted" style="font-size:13px">Sign in with the same account on both devices. Changes stay saved locally while offline and sync when an internet connection returns.</p>
+      <div class="sync-status"><span id="syncDot" class="sync-dot"></span><span id="syncStatus">Sync is not configured</span></div>
+      <div id="syncSetup" class="sync-fields">
+        <div class="field"><label>Supabase Project URL</label><input id="syncUrl" type="url" inputmode="url" placeholder="https://your-project.supabase.co"></div>
+        <div class="field"><label>Supabase Publishable / anon key</label><input id="syncKey" type="password" autocomplete="off" placeholder="Paste the public browser key"></div>
+        <div class="field-row">
+          <div class="field"><label>Email</label><input id="syncEmail" type="email" autocomplete="email" placeholder="you@example.com"></div>
+          <div class="field"><label>Password</label><input id="syncPassword" type="password" autocomplete="current-password" placeholder="At least 6 characters"></div>
+        </div>
+        <div class="actions">
+          <button class="btn primary" type="button" onclick="syncSignIn()">Sign In</button>
+          <button class="btn" type="button" onclick="syncCreateAccount()">Create Account</button>
+        </div>
+      </div>
+      <div id="syncConnected" class="hidden">
+        <div class="actions">
+          <button class="btn primary" type="button" onclick="syncNow(true)">Sync Now</button>
+          <button class="btn" type="button" onclick="syncSignOut()">Sign Out</button>
+        </div>
+        <div class="muted" id="syncLast" style="font-size:12px;margin-top:10px"></div>
+      </div>
+    </div>
+
+    <div class="card">
       <h3>Backup & Transfer</h3>
       <p class="muted" style="font-size:13px">Your collection is stored on this device/browser. Export a backup regularly, especially before clearing Safari data or moving to another device.</p>
       <div class="actions">
@@ -339,7 +368,8 @@
 
 <script>
 const DB_NAME='ModelAircraftLibraryDB', DB_VERSION=1, MODEL_STORE='models', SETTINGS_STORE='settings';
-let db, models=[], settings, currentPhoto=null;
+const SYNC_CONFIG_KEY='MAL_sync_config_v1', SYNC_SESSION_KEY='MAL_sync_session_v1';
+let db, models=[], settings, currentPhoto=null, syncTimer=null, syncBusy=false;
 
 const defaults={
   types:['Airliner','Bush Plane','Fighter','Bomber','General Aviation','Helicopter','Jet','Propeller Aircraft','Seaplane / Floatplane','Transport','Trainer','Glider','Experimental','Other'],
@@ -437,10 +467,97 @@ async function loadSettings(){
   for(const k of ['types','scales','modelManufacturers','decalTypes','conditions','customFields']){
     if(!Array.isArray(settings[k])) settings[k]=[...defaults[k]];
   }
-  await saveSettings();
+  if(!saved)await saveSettings(true);
 }
-async function saveSettings(){await storePut(SETTINGS_STORE,{key:'main',value:settings});}
+async function saveSettings(skipSync=false){
+  settings._updatedAt=new Date().toISOString();
+  await storePut(SETTINGS_STORE,{key:'main',value:settings});
+  if(!skipSync) scheduleSync();
+}
 async function loadModels(){models=await storeGetAll(MODEL_STORE);renderAll();}
+
+function getSyncConfig(){try{return JSON.parse(localStorage.getItem(SYNC_CONFIG_KEY)||'null')}catch(e){return null}}
+function getSyncSession(){try{return JSON.parse(localStorage.getItem(SYNC_SESSION_KEY)||'null')}catch(e){return null}}
+function setSyncState(message,state=''){
+  const label=document.getElementById('syncStatus'),dot=document.getElementById('syncDot');
+  if(label)label.textContent=message;if(dot)dot.className='sync-dot'+(state?' '+state:'');
+}
+function renderSyncUI(){
+  const config=getSyncConfig(),session=getSyncSession(),connected=!!(config&&session?.access_token);
+  document.getElementById('syncSetup')?.classList.toggle('hidden',connected);
+  document.getElementById('syncConnected')?.classList.toggle('hidden',!connected);
+  if(config){document.getElementById('syncUrl').value=config.url||'';document.getElementById('syncKey').value=config.key||'';document.getElementById('syncEmail').value=config.email||''}
+  if(connected)setSyncState(navigator.onLine?`Signed in as ${config.email}`:'Offline — changes are saved locally','ok');
+  else setSyncState('Sync is not configured');
+}
+function cleanSyncUrl(value){return String(value||'').trim().replace(/\/$/,'')}
+function syncCredentials(){
+  return {url:cleanSyncUrl(document.getElementById('syncUrl').value),key:document.getElementById('syncKey').value.trim(),email:document.getElementById('syncEmail').value.trim(),password:document.getElementById('syncPassword').value};
+}
+async function authRequest(path,body,config){
+  const response=await fetch(config.url+'/auth/v1/'+path,{method:'POST',headers:{apikey:config.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const data=await response.json().catch(()=>({}));if(!response.ok)throw new Error(data.msg||data.message||data.error_description||'Sign-in failed');return data;
+}
+function saveSyncLogin(config,session){
+  localStorage.setItem(SYNC_CONFIG_KEY,JSON.stringify({url:config.url,key:config.key,email:config.email}));
+  localStorage.setItem(SYNC_SESSION_KEY,JSON.stringify(session));document.getElementById('syncPassword').value='';renderSyncUI();
+}
+async function syncSignIn(){
+  const config=syncCredentials();if(!config.url||!config.key||!config.email||!config.password){toast('Complete all sync fields');return}
+  try{setSyncState('Signing in…','warn');const session=await authRequest('token?grant_type=password',{email:config.email,password:config.password},config);saveSyncLogin(config,session);await syncNow(true)}
+  catch(err){setSyncState(err.message,'bad');alert('Could not sign in: '+err.message)}
+}
+async function syncCreateAccount(){
+  const config=syncCredentials();if(!config.url||!config.key||!config.email||config.password.length<6){toast('Complete all fields; use a 6+ character password');return}
+  try{
+    setSyncState('Creating account…','warn');const result=await authRequest('signup',{email:config.email,password:config.password},config);
+    if(result.access_token){saveSyncLogin(config,result);await syncNow(true)}else{localStorage.setItem(SYNC_CONFIG_KEY,JSON.stringify({url:config.url,key:config.key,email:config.email}));setSyncState('Check your email, then return and sign in','warn');alert('Account created. Check your email for the confirmation link, then return here and tap Sign In.')}
+  }catch(err){setSyncState(err.message,'bad');alert('Could not create account: '+err.message)}
+}
+function syncSignOut(){localStorage.removeItem(SYNC_SESSION_KEY);renderSyncUI();toast('Signed out; local collection kept')}
+async function validSyncSession(){
+  const config=getSyncConfig();let session=getSyncSession();if(!config||!session)return null;
+  const expiresAt=Number(session.expires_at||0);if(expiresAt&&expiresAt>Date.now()/1000+60)return {config,session};
+  if(!session.refresh_token)return null;
+  session=await authRequest('token?grant_type=refresh_token',{refresh_token:session.refresh_token},config);localStorage.setItem(SYNC_SESSION_KEY,JSON.stringify(session));return {config,session};
+}
+function mergeSyncPayload(local,remote){
+  const localSettings=local.settings||{},remoteSettings=remote.settings||{};
+  const localDeleted=localSettings._deletedModels||{},remoteDeleted=remoteSettings._deletedModels||{};
+  const deleted={...remoteDeleted,...localDeleted};
+  Object.keys(remoteDeleted).forEach(id=>{if((remoteDeleted[id]||'')>(deleted[id]||''))deleted[id]=remoteDeleted[id]});
+  const byId=new Map();
+  [...(remote.models||[]),...(local.models||[])].forEach(model=>{
+    const old=byId.get(model.id),stamp=model.updatedAt||model.createdAt||'';
+    if(!old||stamp>(old.updatedAt||old.createdAt||''))byId.set(model.id,model);
+  });
+  const mergedModels=[...byId.values()].filter(model=>(model.updatedAt||model.createdAt||'')>(deleted[model.id]||''));
+  const mergedSettings=(localSettings._updatedAt||'')>=(remoteSettings._updatedAt||'')?{...localSettings}:{...remoteSettings};
+  mergedSettings._deletedModels=deleted;
+  return {version:2,settings:mergedSettings,models:mergedModels};
+}
+async function persistSyncPayload(payload){
+  await storeClear(MODEL_STORE);for(const model of payload.models||[])await storePut(MODEL_STORE,model);
+  settings={...defaults,...(payload.settings||{})};await saveSettings(true);models=await storeGetAll(MODEL_STORE);renderAll();
+}
+async function syncNow(showResult=false){
+  if(syncBusy||!navigator.onLine)return;const auth=await validSyncSession().catch(()=>null);if(!auth){renderSyncUI();return}
+  syncBusy=true;setSyncState('Syncing…','warn');
+  try{
+    const {config,session}=auth,headers={apikey:config.key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'};
+    const userId=session.user?.id;if(!userId)throw new Error('Session is missing an account ID');
+    const get=await fetch(`${config.url}/rest/v1/aircraft_library_sync?select=payload,updated_at&user_id=eq.${encodeURIComponent(userId)}`,{headers});
+    if(!get.ok)throw new Error((await get.json().catch(()=>({}))).message||'Could not read synced collection');
+    const rows=await get.json(),local={version:2,settings,models};
+    const merged=rows.length?mergeSyncPayload(local,rows[0].payload||{}):local;
+    if(rows.length)await persistSyncPayload(merged);
+    const put=await fetch(config.url+'/rest/v1/aircraft_library_sync',{method:'POST',headers:{...headers,Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:userId,payload:merged,updated_at:new Date().toISOString()})});
+    if(!put.ok)throw new Error((await put.json().catch(()=>({}))).message||'Could not save synced collection');
+    const when=new Date();localStorage.setItem('MAL_last_sync',when.toISOString());setSyncState(`Synced as ${config.email}`,'ok');
+    document.getElementById('syncLast').textContent='Last synced '+when.toLocaleString();if(showResult)toast('Collection synced');
+  }catch(err){console.error(err);setSyncState('Sync error — local copy is safe','bad');if(showResult)alert('Sync failed: '+err.message)}finally{syncBusy=false}
+}
+function scheduleSync(){clearTimeout(syncTimer);if(getSyncSession()&&navigator.onLine)syncTimer=setTimeout(()=>syncNow(false),1200)}
 
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
 function money(n){return new Intl.NumberFormat('en-CA',{style:'currency',currency:settings.currency||'CAD',maximumFractionDigits:0}).format(Number(n)||0)}
@@ -552,8 +669,11 @@ document.getElementById('modelForm').addEventListener('submit',async e=>{
     custom,
     createdAt:existing?.createdAt||now, updatedAt:now
   };
+  settings._deletedModels=settings._deletedModels||{};delete settings._deletedModels[obj.id];
   await storePut(MODEL_STORE,obj);
+  await saveSettings(true);
   await loadModels();
+  scheduleSync();
   toast(editId?'Model updated':'Model added to collection');
   resetForm();
   goPage('library');
@@ -583,7 +703,8 @@ function editModel(id){
 async function deleteModel(id){
   const m=models.find(x=>x.id===id);if(!m)return;
   if(!confirm(`Delete "${m.name}" from your collection?`))return;
-  await storeDelete(MODEL_STORE,id);await loadModels();toast('Model deleted');
+  settings._deletedModels=settings._deletedModels||{};settings._deletedModels[id]=new Date().toISOString();
+  await storeDelete(MODEL_STORE,id);await saveSettings(true);await loadModels();scheduleSync();toast('Model deleted');
 }
 
 function renderAll(){refreshFormLists();renderDashboard();refreshFilters();renderLibrary();renderSettings()}
@@ -677,6 +798,7 @@ function showDetails(id){
 }
 
 function renderSettings(){
+  renderSyncUI();
   const configs=[['types','typesPills'],['scales','scalesPills'],['modelManufacturers','mfrPills'],['decalTypes','decalPills'],['conditions','conditionPills']];
   configs.forEach(([key,id])=>document.getElementById(id).innerHTML=settings[key].map((x,i)=>`<span class="tagpill">${esc(x)} <button onclick="removeListItem('${key}',${i})">×</button></span>`).join(''));
   const c=document.getElementById('customFieldsList');
@@ -719,8 +841,9 @@ document.getElementById('importFile').addEventListener('change',async e=>{
     if(!confirm(`Import ${data.models.length} models? This will replace the collection currently stored here.`)){e.target.value='';return}
     await storeClear(MODEL_STORE);
     for(const m of data.models) await storePut(MODEL_STORE,m);
-    if(data.settings){settings={...defaults,...data.settings};await saveSettings()}
-    await loadModels();toast('Backup imported successfully');goPage('dashboard');
+    if(data.settings)settings={...defaults,...data.settings};
+    settings._deletedModels={};await saveSettings(true);
+    await loadModels();scheduleSync();toast('Backup imported successfully');goPage('dashboard');
   }catch(err){alert('That file does not appear to be a valid Model Aircraft Library backup.')}
   e.target.value='';
 });
@@ -738,7 +861,8 @@ function exportCSV(){
 async function deleteAllModels(){
   if(!confirm('Delete the ENTIRE collection from this browser? This cannot be undone unless you have exported a backup.'))return;
   if(!confirm('Final confirmation: permanently delete every model?'))return;
-  await storeClear(MODEL_STORE);await loadModels();toast('Collection deleted');
+  settings._deletedModels=settings._deletedModels||{};const now=new Date().toISOString();models.forEach(m=>settings._deletedModels[m.id]=now);
+  await storeClear(MODEL_STORE);await saveSettings(true);await loadModels();scheduleSync();toast('Collection deleted');
 }
 
 (async function init(){
@@ -766,6 +890,11 @@ async function deleteAllModels(){
       'Temporary session only';
     const initial=(location.hash||'#dashboard').slice(1);
     if(document.getElementById(initial)?.classList.contains('page')) goPage(initial);
+    renderSyncUI();
+    window.addEventListener('online',()=>{renderSyncUI();syncNow(false)});
+    window.addEventListener('offline',renderSyncUI);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow(false)});
+    if(getSyncSession()&&navigator.onLine)syncNow(false);
   }catch(err){
     console.error(err);
     settings={...defaults};

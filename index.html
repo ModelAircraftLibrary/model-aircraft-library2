@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#0f2742">
+<title>Model Aircraft Library</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-title" content="Aircraft Library">
+<meta name="mobile-web-app-capable" content="yes">
+
+<script>document.documentElement.className="js";</script>
+<style>
+  :root{
+    --navy:#0f2742; --navy2:#183a60; --blue:#2f6fa8; --sky:#eaf3fb;
+    --bg:#f4f6f8; --card:#ffffff; --text:#17202a; --muted:#66717d;
+    --line:#dfe5eb; --danger:#b63a3a; --ok:#2d7b57; --warn:#a66a18;
+    --shadow:0 8px 28px rgba(15,39,66,.08);
+    --radius:18px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;min-height:100%;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  button,input,select,textarea{font:inherit}
+  button{cursor:pointer;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  .app{min-height:100vh;display:flex;flex-direction:column}
+  header{
+    position:sticky;top:0;z-index:30;background:rgba(15,39,66,.97);color:#fff;
+    padding:calc(14px + env(safe-area-inset-top)) 18px 12px;
+    box-shadow:0 2px 16px rgba(0,0,0,.15)
+  }
+  .headrow{max-width:1320px;margin:auto;display:flex;align-items:center;gap:14px}
+  .brand{display:flex;align-items:center;gap:12px;min-width:0;flex:1}
+  .logo{width:42px;height:42px;border-radius:12px;background:#fff1;display:grid;place-items:center;font-size:23px;border:1px solid #ffffff2a}
+  .brand h1{font-size:20px;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .brand small{display:block;color:#cbd9e6;font-size:12px;margin-top:2px}
+  nav{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none}
+  nav::-webkit-scrollbar{display:none}
+  nav a{
+    border:0;background:transparent;color:#d8e5f2;padding:10px 12px;border-radius:10px;font-weight:700;
+    white-space:nowrap;text-decoration:none;display:inline-block;-webkit-tap-highlight-color:transparent;touch-action:manipulation
+  }
+  nav a.active{background:#ffffff18;color:white}
+  main{width:min(1320px,100%);margin:0 auto;padding:22px 18px calc(42px + env(safe-area-inset-bottom))}
+  /* Without JavaScript (for example iOS Files/Quick Look), show all sections so the
+     file is not trapped on the dashboard. With JS, restore normal app-style pages. */
+  .page{display:block;margin-bottom:54px}
+  .js .page{display:none;margin-bottom:0}
+  .js .page.active{display:block}
+  .preview-warning{display:block;background:#fff3cd;color:#5f4b00;border-bottom:1px solid #eadb99;padding:12px 18px;font-size:13px;line-height:1.4}
+  .js .preview-warning{display:none}
+  .page-title{display:flex;justify-content:space-between;align-items:end;gap:12px;margin-bottom:18px}
+  .page-title h2{margin:0;font-size:28px;letter-spacing:-.5px}
+  .page-title p{margin:6px 0 0;color:var(--muted)}
+  .actions{display:flex;gap:9px;flex-wrap:wrap}
+  .btn{
+    border:1px solid var(--line);background:#fff;color:var(--text);padding:10px 14px;border-radius:11px;font-weight:700;
+    box-shadow:0 1px 2px rgba(0,0,0,.03)
+  }
+  .btn:hover{border-color:#b9c5d0}.btn.primary{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .btn.secondary{background:var(--sky);color:var(--navy);border-color:#cfe0ef}
+  .btn.danger{color:var(--danger);border-color:#eccaca;background:#fff7f7}
+  .btn.small{padding:7px 10px;font-size:13px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:19px;box-shadow:var(--shadow)}
+  .stat .label{color:var(--muted);font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+  .stat .value{font-size:30px;font-weight:800;margin-top:8px;color:var(--navy)}
+  .stat .sub{font-size:12px;color:var(--muted);margin-top:5px}
+  .grid2{display:grid;grid-template-columns:1.2fr .8fr;gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow)}
+  .card h3{margin:0 0 14px;font-size:18px}
+  .chart-row{display:grid;grid-template-columns:120px 1fr 44px;gap:10px;align-items:center;margin:10px 0;font-size:13px}
+  .bar{height:10px;background:#edf1f5;border-radius:999px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--blue),var(--navy2));border-radius:999px}
+  .recent{display:grid;gap:9px}
+  .recent-item{display:flex;gap:11px;align-items:center;padding:9px;border:1px solid var(--line);border-radius:13px}
+  .thumb{width:64px;height:48px;border-radius:9px;background:#edf2f6;object-fit:cover;flex:0 0 auto}
+  .recent-item b{display:block}
+  .recent-item small{color:var(--muted)}
+  .empty{padding:34px 12px;text-align:center;color:var(--muted)}
+  .form-card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+  .section-title{font-size:15px;font-weight:800;color:var(--navy);margin:6px 0 12px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .form-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .field{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .field.span2{grid-column:span 2}.field.span3{grid-column:span 3}
+  label{font-size:13px;font-weight:750;color:#34404b}
+  input,select,textarea{
+    width:100%;border:1px solid #cfd7df;background:#fff;border-radius:11px;padding:11px 12px;color:var(--text);outline:none
+  }
+  input:focus,select:focus,textarea:focus{border-color:#7ea9ce;box-shadow:0 0 0 3px #2f6fa815}
+  textarea{min-height:100px;resize:vertical}
+  .help{font-size:11px;color:var(--muted)}
+  .photo-box{
+    border:1.5px dashed #b9c7d4;border-radius:14px;min-height:190px;display:grid;place-items:center;overflow:hidden;background:#f8fafc
+  }
+  .photo-box img{max-width:100%;max-height:300px;object-fit:contain}
+  .photo-placeholder{text-align:center;color:var(--muted);padding:20px}
+  .form-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:18px}
+  .filterbar{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow);margin-bottom:14px}
+  .filters{display:grid;grid-template-columns:2fr repeat(5,1fr);gap:10px}
+  .library-summary{display:flex;justify-content:space-between;align-items:center;gap:10px;margin:10px 2px;color:var(--muted);font-size:13px}
+  .models{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .model-card{background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .model-img{height:180px;width:100%;object-fit:cover;background:#e9eef3}
+  .model-img-placeholder{height:180px;display:grid;place-items:center;background:linear-gradient(145deg,#eef3f7,#dfe7ee);font-size:44px;color:#8aa0b5}
+  .model-body{padding:14px;display:flex;flex-direction:column;gap:8px;flex:1}
+  .model-title{font-weight:850;font-size:17px;line-height:1.15}
+  .meta{color:var(--muted);font-size:12px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{background:var(--sky);color:var(--navy);border-radius:999px;padding:5px 8px;font-size:11px;font-weight:750}
+  .model-foot{display:flex;justify-content:space-between;align-items:center;margin-top:auto;padding-top:6px}
+  .price{font-weight:850;color:var(--ok)}
+  .rowbuttons{display:flex;gap:6px}
+  .settings-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .list-editor{display:grid;gap:9px}
+  .list-line{display:flex;gap:8px}
+  .list-line input{flex:1}
+  .custom-field-row{display:grid;grid-template-columns:1.3fr .7fr 1fr auto;gap:8px;align-items:end;margin-bottom:9px}
+  .tag-editor{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .tagpill{display:flex;align-items:center;gap:6px;background:#edf2f6;border-radius:999px;padding:6px 9px;font-size:12px}
+  .tagpill button{border:0;background:transparent;color:var(--danger);font-weight:900;padding:0}
+  dialog{border:0;border-radius:18px;padding:0;max-width:760px;width:calc(100% - 24px);box-shadow:0 25px 80px rgba(0,0,0,.28)}
+  dialog::backdrop{background:rgba(10,22,35,.5)}
+  .modal-head{padding:16px 18px;background:var(--navy);color:#fff;display:flex;justify-content:space-between;align-items:center}
+  .modal-head h3{margin:0}.modal-head button{border:0;background:transparent;color:white;font-size:22px}
+  .modal-body{padding:18px;max-height:72vh;overflow:auto}
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 16px;font-size:13px}
+  .detail-grid div{padding:8px 0;border-bottom:1px solid #edf0f3}
+  .detail-grid b{display:block;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.3px;margin-bottom:3px}
+  .toast{
+    position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(30px);
+    background:#17202a;color:white;padding:11px 16px;border-radius:999px;opacity:0;pointer-events:none;transition:.25s;z-index:100;font-weight:700;font-size:13px
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .danger-zone{border:1px solid #efcaca;background:#fff8f8}
+  .switch-row{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+  .muted{color:var(--muted)}
+  .hidden{display:none!important}
+  @media (max-width:1050px){.models{grid-template-columns:repeat(3,1fr)}.filters{grid-template-columns:2fr repeat(3,1fr)}.filters .optional{display:none}}
+  @media (max-width:820px){
+    header{padding-left:12px;padding-right:12px}.headrow{display:block}.brand{margin-bottom:9px}.brand small{display:none}
+    nav button{padding:8px 10px}
+    main{padding:16px 12px 34px}
+    .stats{grid-template-columns:1fr 1fr}.grid2,.settings-grid{grid-template-columns:1fr}
+    .form-grid{grid-template-columns:1fr 1fr}.field.span3{grid-column:span 2}
+    .models{grid-template-columns:1fr 1fr}.filters{grid-template-columns:1fr 1fr}
+    .filters input:first-child{grid-column:span 2}
+  }
+  @media (max-width:560px){
+    .page-title{align-items:flex-start;flex-direction:column}.page-title h2{font-size:25px}
+    .stats{gap:9px}.stat{padding:14px}.stat .value{font-size:25px}
+    .form-grid{grid-template-columns:1fr}.field.span2,.field.span3{grid-column:span 1}
+    .models{grid-template-columns:1fr}.filters{grid-template-columns:1fr}.filters input:first-child{grid-column:span 1}
+    .custom-field-row{grid-template-columns:1fr 1fr}.custom-field-row .wide{grid-column:span 2}
+    .detail-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+<header>
+  <div class="headrow">
+    <div class="brand">
+      <div class="logo">✈️</div>
+      <div><h1>Model Aircraft Library</h1><small>Collection manager</small></div>
+    </div>
+    <nav>
+      <a href="#dashboard" data-page="dashboard" class="active">Dashboard</a>
+      <a href="#add" data-page="add">Add Model</a>
+      <a href="#library" data-page="library">Library</a>
+      <a href="#settings" data-page="settings">Fields & Backup</a>
+    </nav>
+  </div>
+</header>
+<div class="preview-warning">
+  <b>JavaScript is not running.</b> Open this app in Safari or from its Home Screen icon to use saving, filtering and editing.
+</div>
+
+<main>
+<section id="dashboard" class="page active">
+  <div class="page-title">
+    <div><h2>Collection Dashboard</h2><p>A quick look at your model aircraft collection.</p></div>
+    <div class="actions"><button class="btn primary" onclick="goPage('add')">+ Add Model</button></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="label">Aircraft</div><div class="value" id="statCount">0</div><div class="sub">models in collection</div></div>
+    <div class="stat"><div class="label">Collection Value</div><div class="value" id="statValue">$0</div><div class="sub">estimated current value</div></div>
+    <div class="stat"><div class="label">Scales</div><div class="value" id="statScales">0</div><div class="sub">different scales represented</div></div>
+    <div class="stat"><div class="label">Manufacturers</div><div class="value" id="statMfrs">0</div><div class="sub">model manufacturers</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><h3>Collection by Aircraft Type</h3><div id="typeChart"></div></div>
+    <div class="card"><h3>Recently Added</h3><div id="recentList" class="recent"></div></div>
+  </div>
+</section>
+
+<section id="add" class="page">
+  <div class="page-title">
+    <div><h2 id="formHeading">Add a Model</h2><p>Enter as much or as little information as you have.</p></div>
+  </div>
+  <form id="modelForm" class="form-card" autocomplete="off">
+    <input type="hidden" id="editId">
+    <div class="section-title">Aircraft & Model</div>
+    <div class="form-grid">
+      <div class="field span2"><label for="name">Model / Aircraft Name *</label><input id="name" required placeholder="e.g. De Havilland Canada DHC-2 Beaver"></div>
+      <div class="field"><label for="aircraftType">Aircraft Type</label><select id="aircraftType"></select></div>
+      <div class="field"><label for="aircraftManufacturer">Aircraft Manufacturer</label><input id="aircraftManufacturer" placeholder="e.g. de Havilland Canada"></div>
+      <div class="field"><label for="country">Country of Origin</label><input id="country" list="countryList" placeholder="e.g. Canada"><datalist id="countryList"></datalist></div>
+      <div class="field"><label for="era">Era</label><input id="era" placeholder="e.g. 1950s, WWII, Modern"></div>
+      <div class="field"><label for="modelManufacturer">Model Manufacturer</label><select id="modelManufacturer"></select></div>
+      <div class="field"><label for="scale">Scale</label><select id="scale"></select></div>
+      <div class="field"><label for="decalType">Decal / Marking Type</label><select id="decalType"></select></div>
+      <div class="field"><label for="registration">Registration / Tail Number</label><input id="registration" placeholder="e.g. CF-FHB"></div>
+      <div class="field"><label for="operator">Airline / Operator / Unit</label><input id="operator" placeholder="e.g. RCAF, Air Canada, Inland Air"></div>
+      <div class="field"><label for="condition">Condition</label><select id="condition"></select></div>
+    </div>
+
+    <div class="section-title" style="margin-top:20px">Collection Details</div>
+    <div class="form-grid">
+      <div class="field"><label for="purchasePrice">Purchase Price</label><input id="purchasePrice" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label for="currentValue">Estimated Current Value</label><input id="currentValue" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00"></div>
+      <div class="field"><label for="dateAcquired">Date Acquired</label><input id="dateAcquired" type="date"></div>
+      <div class="field span3"><label for="tags">Tags</label><input id="tags" placeholder="Separate tags with commas — e.g. floatplane, Canadian, favourite, rare"><div class="help">Tags are searchable and can be used as a library filter.</div></div>
+    </div>
+
+    <div class="section-title" style="margin-top:20px">Photo</div>
+    <div class="form-grid">
+      <div class="field span3">
+        <div class="photo-box" id="photoBox"><div class="photo-placeholder">📷<br><b>Add a photo</b><br><small>Photos are resized automatically to save storage space.</small></div></div>
+        <input id="photoInput" type="file" accept="image/*" style="margin-top:8px">
+        <button type="button" class="btn small hidden" id="removePhotoBtn" onclick="removePhoto()">Remove Photo</button>
+      </div>
+    </div>
+
+    <div id="customFieldsSection"></div>
+
+    <div class="section-title" style="margin-top:20px">Notes</div>
+    <div class="form-grid">
+      <div class="field span3"><textarea id="notes" placeholder="History, paint scheme, where you found it, condition details, missing parts, display location, etc."></textarea></div>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn hidden" id="cancelEditBtn" onclick="cancelEdit()">Cancel Edit</button>
+      <button type="submit" class="btn primary" id="saveBtn">Save Model</button>
+    </div>
+  </form>
+</section>
+
+<section id="library" class="page">
+  <div class="page-title">
+    <div><h2>Model Library</h2><p>Search, filter, sort, review and edit your collection.</p></div>
+    <div class="actions"><button class="btn primary" onclick="goPage('add')">+ Add Model</button></div>
+  </div>
+  <div class="filterbar">
+    <div class="filters">
+      <input id="searchInput" placeholder="Search aircraft, manufacturer, operator, registration, tags…">
+      <select id="filterType"></select>
+      <select id="filterScale"></select>
+      <select id="filterCountry"></select>
+      <select id="filterModelMfr" class="optional"></select>
+      <select id="filterTag" class="optional"></select>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap">
+      <select id="sortBy" style="max-width:230px">
+        <option value="added-desc">Newest Added</option>
+        <option value="added-asc">Oldest Added</option>
+        <option value="name-asc">Name A–Z</option>
+        <option value="name-desc">Name Z–A</option>
+        <option value="value-desc">Value High–Low</option>
+        <option value="value-asc">Value Low–High</option>
+        <option value="scale-asc">Scale</option>
+      </select>
+      <button class="btn small" type="button" onclick="clearFilters()">Clear Filters</button>
+    </div>
+  </div>
+  <div class="library-summary"><span id="libraryCount">Showing 0 models</span><span id="libraryValue"></span></div>
+  <div id="modelsGrid" class="models"></div>
+</section>
+
+<section id="settings" class="page">
+  <div class="page-title">
+    <div><h2>Fields & Backup</h2><p>Customize dropdown lists, add your own fields, and protect your collection with backups.</p></div>
+  </div>
+  <div class="settings-grid">
+    <div class="card">
+      <h3>Editable Lists</h3>
+      <p class="muted" style="font-size:13px">Add common choices here. Existing models keep their saved values even if you later remove a choice.</p>
+      <div class="list-editor">
+        <label>Aircraft Types</label><div class="list-line"><input id="newType" placeholder="e.g. Glider"><button class="btn small" onclick="addListItem('types','newType')">Add</button></div><div id="typesPills" class="tag-editor"></div>
+        <label style="margin-top:10px">Scales</label><div class="list-line"><input id="newScale" placeholder="e.g. 1:200"><button class="btn small" onclick="addListItem('scales','newScale')">Add</button></div><div id="scalesPills" class="tag-editor"></div>
+        <label style="margin-top:10px">Model Manufacturers</label><div class="list-line"><input id="newMfr" placeholder="e.g. GeminiJets"><button class="btn small" onclick="addListItem('modelManufacturers','newMfr')">Add</button></div><div id="mfrPills" class="tag-editor"></div>
+        <label style="margin-top:10px">Decal / Marking Types</label><div class="list-line"><input id="newDecal" placeholder="e.g. Military"><button class="btn small" onclick="addListItem('decalTypes','newDecal')">Add</button></div><div id="decalPills" class="tag-editor"></div>
+        <label style="margin-top:10px">Conditions</label><div class="list-line"><input id="newCondition" placeholder="e.g. Displayed"><button class="btn small" onclick="addListItem('conditions','newCondition')">Add</button></div><div id="conditionPills" class="tag-editor"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Custom Fields</h3>
+      <p class="muted" style="font-size:13px">Add new information fields without changing the app. Custom fields appear on every model entry.</p>
+      <div class="custom-field-row">
+        <div class="field wide"><label>Field Name</label><input id="cfName" placeholder="e.g. Display Shelf"></div>
+        <div class="field"><label>Type</label><select id="cfType"><option value="text">Text</option><option value="number">Number</option><option value="select">Dropdown</option></select></div>
+        <div class="field wide"><label>Dropdown Choices</label><input id="cfOptions" placeholder="Comma-separated; only for dropdown"></div>
+        <button class="btn small primary" onclick="addCustomField()">Add</button>
+      </div>
+      <div id="customFieldsList"></div>
+    </div>
+
+    <div class="card">
+      <h3>Backup & Transfer</h3>
+      <p class="muted" style="font-size:13px">Your collection is stored on this device/browser. Export a backup regularly, especially before clearing Safari data or moving to another device.</p>
+      <div class="actions">
+        <button class="btn primary" onclick="exportBackup()">Export Backup (.json)</button>
+        <button class="btn" onclick="document.getElementById('importFile').click()">Import Backup</button>
+        <input class="hidden" id="importFile" type="file" accept=".json,application/json">
+        <button class="btn secondary" onclick="exportCSV()">Export Collection (.csv)</button>
+      </div>
+      <div class="switch-row" style="margin-top:14px"><div><b>Database</b><div class="muted" style="font-size:12px">IndexedDB local storage</div></div><span id="dbStatus">Ready</span></div>
+    </div>
+
+    <div class="card danger-zone">
+      <h3>Danger Zone</h3>
+      <p class="muted" style="font-size:13px">This permanently deletes every model stored in this browser. Export a backup first if you may want the data later.</p>
+      <button class="btn danger" onclick="deleteAllModels()">Delete Entire Collection</button>
+    </div>
+  </div>
+</section>
+</main>
+</div>
+
+<dialog id="detailDialog">
+  <div class="modal-head"><h3 id="detailTitle">Model Details</h3><button onclick="document.getElementById('detailDialog').close()">×</button></div>
+  <div class="modal-body" id="detailBody"></div>
+</dialog>
+
+<div id="toast" class="toast"></div>
+
+<script>
+const DB_NAME='ModelAircraftLibraryDB', DB_VERSION=1, MODEL_STORE='models', SETTINGS_STORE='settings';
+let db, models=[], settings, currentPhoto=null;
+
+const defaults={
+  types:['Airliner','Bush Plane','Fighter','Bomber','General Aviation','Helicopter','Jet','Propeller Aircraft','Seaplane / Floatplane','Transport','Trainer','Glider','Experimental','Other'],
+  scales:['1:18','1:24','1:32','1:48','1:72','1:100','1:144','1:200','1:250','1:400','1:500','1:700','Other'],
+  modelManufacturers:['Airfix','Corgi','GeminiJets','Hasegawa','Herpa','Hobby Master','Inflight200','JC Wings','Matchbox','Minicraft','Revell','Tamiya','Witty Wings','Other'],
+  decalTypes:['Factory / Original','Airline','Civil','Military','Custom','Historical','Special Livery','Unmarked','Other'],
+  conditions:['New / Boxed','Excellent','Very Good','Good','Fair','Needs Repair','Restoration Project'],
+  customFields:[],
+  currency:'CAD'
+};
+const countries=['Canada','United States','United Kingdom','France','Germany','Italy','Japan','China','Russia','Soviet Union','Ukraine','Sweden','Switzerland','Netherlands','Spain','Brazil','Australia','New Zealand','Czech Republic','Poland','South Korea','India','Israel','South Africa'];
+
+function openDB(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB_NAME,DB_VERSION);
+    req.onupgradeneeded=e=>{
+      const d=e.target.result;
+      if(!d.objectStoreNames.contains(MODEL_STORE)){
+        const s=d.createObjectStore(MODEL_STORE,{keyPath:'id'});
+        s.createIndex('createdAt','createdAt');
+      }
+      if(!d.objectStoreNames.contains(SETTINGS_STORE)) d.createObjectStore(SETTINGS_STORE,{keyPath:'key'});
+    };
+    req.onsuccess=e=>{db=e.target.result;resolve(db)};
+    req.onerror=e=>reject(e.target.error);
+  });
+}
+let storageMode='idb';
+const memoryStore={models:[],settings:[]};
+
+function lsKey(name){return 'MAL_v2_'+name}
+function localRead(name){
+  try{
+    const raw=localStorage.getItem(lsKey(name));
+    return raw?JSON.parse(raw):[];
+  }catch(e){return memoryStore[name]||[]}
+}
+function localWrite(name,rows){
+  try{
+    localStorage.setItem(lsKey(name),JSON.stringify(rows));
+    return true;
+  }catch(e){
+    memoryStore[name]=rows;
+    storageMode='memory';
+    return false;
+  }
+}
+function storeGetAll(name){
+  if(storageMode!=='idb' || !db) return Promise.resolve(localRead(name));
+  return new Promise((resolve,reject)=>{
+    const r=db.transaction(name,'readonly').objectStore(name).getAll();
+    r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  });
+}
+function storePut(name,obj){
+  if(storageMode!=='idb' || !db){
+    const rows=localRead(name);
+    const key=name===MODEL_STORE?'id':'key';
+    const i=rows.findIndex(x=>x[key]===obj[key]);
+    if(i>=0) rows[i]=obj; else rows.push(obj);
+    localWrite(name,rows);
+    return Promise.resolve(obj[key]);
+  }
+  return new Promise((resolve,reject)=>{
+    const r=db.transaction(name,'readwrite').objectStore(name).put(obj);
+    r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);
+  });
+}
+function storeDelete(name,keyVal){
+  if(storageMode!=='idb' || !db){
+    const key=name===MODEL_STORE?'id':'key';
+    const rows=localRead(name).filter(x=>x[key]!==keyVal);
+    localWrite(name,rows);
+    return Promise.resolve();
+  }
+  return new Promise((resolve,reject)=>{
+    const r=db.transaction(name,'readwrite').objectStore(name).delete(keyVal);
+    r.onsuccess=()=>resolve();r.onerror=()=>reject(r.error);
+  });
+}
+function storeClear(name){
+  if(storageMode!=='idb' || !db){
+    localWrite(name,[]);
+    return Promise.resolve();
+  }
+  return new Promise((resolve,reject)=>{
+    const r=db.transaction(name,'readwrite').objectStore(name).clear();
+    r.onsuccess=()=>resolve();r.onerror=()=>reject(r.error);
+  });
+}
+async function loadSettings(){
+  const rows=await storeGetAll(SETTINGS_STORE);
+  const saved=rows.find(x=>x.key==='main');
+  settings=saved?{...defaults,...saved.value}:{...defaults};
+  for(const k of ['types','scales','modelManufacturers','decalTypes','conditions','customFields']){
+    if(!Array.isArray(settings[k])) settings[k]=[...defaults[k]];
+  }
+  await saveSettings();
+}
+async function saveSettings(){await storePut(SETTINGS_STORE,{key:'main',value:settings});}
+async function loadModels(){models=await storeGetAll(MODEL_STORE);renderAll();}
+
+function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
+function money(n){return new Intl.NumberFormat('en-CA',{style:'currency',currency:settings.currency||'CAD',maximumFractionDigits:0}).format(Number(n)||0)}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200)}
+function uid(){return (crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2));}
+
+function goPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.toggle('active',p.id===id));
+  document.querySelectorAll('nav a').forEach(b=>b.classList.toggle('active',b.dataset.page===id));
+  if(id==='dashboard') renderDashboard();
+  if(id==='library') renderLibrary();
+  if(id==='settings') renderSettings();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+document.querySelectorAll('nav a').forEach(b=>b.addEventListener('click',e=>{
+  e.preventDefault();
+  goPage(b.dataset.page);
+  try{history.replaceState(null,'','#'+b.dataset.page)}catch(_){}
+}));
+window.addEventListener('hashchange',()=>{
+  const id=(location.hash||'#dashboard').slice(1);
+  if(document.getElementById(id)?.classList.contains('page')) goPage(id);
+});
+
+function fillSelect(id,items,blank='— Select —',selected=''){
+  const el=document.getElementById(id); if(!el)return;
+  const current=selected!==''?selected:el.value;
+  el.innerHTML=`<option value="">${esc(blank)}</option>`+items.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  if(current && !items.includes(current)) el.insertAdjacentHTML('beforeend',`<option value="${esc(current)}">${esc(current)}</option>`);
+  el.value=current||'';
+}
+function refreshFormLists(){
+  fillSelect('aircraftType',settings.types);
+  fillSelect('scale',settings.scales);
+  fillSelect('modelManufacturer',settings.modelManufacturers);
+  fillSelect('decalType',settings.decalTypes);
+  fillSelect('condition',settings.conditions);
+  document.getElementById('countryList').innerHTML=countries.map(x=>`<option value="${esc(x)}">`).join('');
+  renderCustomFieldsForm();
+}
+function renderCustomFieldsForm(values={}){
+  const host=document.getElementById('customFieldsSection');
+  if(!settings.customFields.length){host.innerHTML='';return}
+  host.innerHTML=`<div class="section-title" style="margin-top:20px">Custom Fields</div><div class="form-grid" id="customFieldsGrid"></div>`;
+  const grid=document.getElementById('customFieldsGrid');
+  settings.customFields.forEach(f=>{
+    const val=values[f.id]??'';
+    let control='';
+    if(f.type==='select'){
+      control=`<select data-custom="${f.id}"><option value="">— Select —</option>${(f.options||[]).map(x=>`<option value="${esc(x)}" ${x===val?'selected':''}>${esc(x)}</option>`).join('')}</select>`;
+    } else control=`<input data-custom="${f.id}" type="${f.type==='number'?'number':'text'}" value="${esc(val)}">`;
+    grid.insertAdjacentHTML('beforeend',`<div class="field"><label>${esc(f.name)}</label>${control}</div>`);
+  });
+}
+
+document.getElementById('photoInput').addEventListener('change',async e=>{
+  const file=e.target.files[0]; if(!file)return;
+  try{currentPhoto=await resizeImage(file,1000,0.78);renderPhoto();}catch(err){toast('Could not read that image')}
+});
+function resizeImage(file,maxDim=1000,quality=.78){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        let w=img.width,h=img.height;
+        const ratio=Math.min(1,maxDim/Math.max(w,h)); w=Math.round(w*ratio);h=Math.round(h*ratio);
+        const c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        resolve(c.toDataURL('image/jpeg',quality));
+      };
+      img.onerror=reject;img.src=reader.result;
+    };
+    reader.onerror=reject;reader.readAsDataURL(file);
+  });
+}
+function renderPhoto(){
+  const box=document.getElementById('photoBox'),btn=document.getElementById('removePhotoBtn');
+  if(currentPhoto){box.innerHTML=`<img src="${currentPhoto}" alt="Model photo">`;btn.classList.remove('hidden')}
+  else{box.innerHTML='<div class="photo-placeholder">📷<br><b>Add a photo</b><br><small>Photos are resized automatically to save storage space.</small></div>';btn.classList.add('hidden')}
+}
+function removePhoto(){currentPhoto=null;document.getElementById('photoInput').value='';renderPhoto()}
+
+document.getElementById('modelForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const editId=document.getElementById('editId').value;
+  const existing=models.find(m=>m.id===editId);
+  const custom={};
+  document.querySelectorAll('[data-custom]').forEach(el=>custom[el.dataset.custom]=el.value);
+  const now=new Date().toISOString();
+  const obj={
+    id:editId||uid(), name:document.getElementById('name').value.trim(),
+    aircraftType:document.getElementById('aircraftType').value,
+    aircraftManufacturer:document.getElementById('aircraftManufacturer').value.trim(),
+    country:document.getElementById('country').value.trim(),
+    era:document.getElementById('era').value.trim(),
+    modelManufacturer:document.getElementById('modelManufacturer').value,
+    scale:document.getElementById('scale').value,
+    decalType:document.getElementById('decalType').value,
+    registration:document.getElementById('registration').value.trim(),
+    operator:document.getElementById('operator').value.trim(),
+    condition:document.getElementById('condition').value,
+    purchasePrice:Number(document.getElementById('purchasePrice').value)||0,
+    currentValue:Number(document.getElementById('currentValue').value)||0,
+    dateAcquired:document.getElementById('dateAcquired').value,
+    tags:document.getElementById('tags').value.split(',').map(x=>x.trim()).filter(Boolean),
+    photo:currentPhoto||'',
+    notes:document.getElementById('notes').value.trim(),
+    custom,
+    createdAt:existing?.createdAt||now, updatedAt:now
+  };
+  await storePut(MODEL_STORE,obj);
+  await loadModels();
+  toast(editId?'Model updated':'Model added to collection');
+  resetForm();
+  goPage('library');
+});
+function resetForm(){
+  document.getElementById('modelForm').reset();document.getElementById('editId').value='';currentPhoto=null;renderPhoto();
+  document.getElementById('formHeading').textContent='Add a Model';
+  document.getElementById('saveBtn').textContent='Save Model';
+  document.getElementById('cancelEditBtn').classList.add('hidden');
+  refreshFormLists();
+}
+function cancelEdit(){resetForm();goPage('library')}
+function editModel(id){
+  const m=models.find(x=>x.id===id);if(!m)return;
+  refreshFormLists();
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v??''};
+  set('editId',m.id);set('name',m.name);set('aircraftType',m.aircraftType);set('aircraftManufacturer',m.aircraftManufacturer);
+  set('country',m.country);set('era',m.era);set('modelManufacturer',m.modelManufacturer);set('scale',m.scale);set('decalType',m.decalType);
+  set('registration',m.registration);set('operator',m.operator);set('condition',m.condition);set('purchasePrice',m.purchasePrice||'');
+  set('currentValue',m.currentValue||'');set('dateAcquired',m.dateAcquired);set('tags',(m.tags||[]).join(', '));set('notes',m.notes);
+  currentPhoto=m.photo||null;renderPhoto();renderCustomFieldsForm(m.custom||{});
+  document.getElementById('formHeading').textContent='Edit Model';
+  document.getElementById('saveBtn').textContent='Update Model';
+  document.getElementById('cancelEditBtn').classList.remove('hidden');
+  goPage('add');
+}
+async function deleteModel(id){
+  const m=models.find(x=>x.id===id);if(!m)return;
+  if(!confirm(`Delete "${m.name}" from your collection?`))return;
+  await storeDelete(MODEL_STORE,id);await loadModels();toast('Model deleted');
+}
+
+function renderAll(){refreshFormLists();renderDashboard();refreshFilters();renderLibrary();renderSettings()}
+function renderDashboard(){
+  document.getElementById('statCount').textContent=models.length.toLocaleString();
+  document.getElementById('statValue').textContent=money(models.reduce((a,m)=>a+(Number(m.currentValue)||0),0));
+  document.getElementById('statScales').textContent=new Set(models.map(m=>m.scale).filter(Boolean)).size;
+  document.getElementById('statMfrs').textContent=new Set(models.map(m=>m.modelManufacturer).filter(Boolean)).size;
+  const counts={};models.forEach(m=>{const k=m.aircraftType||'Unspecified';counts[k]=(counts[k]||0)+1});
+  const rows=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,10),max=Math.max(1,...rows.map(r=>r[1]));
+  document.getElementById('typeChart').innerHTML=rows.length?rows.map(([k,v])=>`<div class="chart-row"><span>${esc(k)}</span><div class="bar"><i style="width:${v/max*100}%"></i></div><b>${v}</b></div>`).join(''):'<div class="empty">Add your first model to see collection statistics.</div>';
+  const recent=[...models].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,5);
+  document.getElementById('recentList').innerHTML=recent.length?recent.map(m=>`<div class="recent-item" onclick="showDetails('${m.id}')" style="cursor:pointer">${m.photo?`<img class="thumb" src="${m.photo}">`:`<div class="thumb" style="display:grid;place-items:center">✈️</div>`}<div><b>${esc(m.name)}</b><small>${esc([m.scale,m.aircraftType].filter(Boolean).join(' • ')||'No classification')}</small></div></div>`).join(''):'<div class="empty">No models yet.</div>';
+}
+function refreshFilters(){
+  const val=id=>document.getElementById(id)?.value||'';
+  const saved={type:val('filterType'),scale:val('filterScale'),country:val('filterCountry'),mfr:val('filterModelMfr'),tag:val('filterTag')};
+  const uniq=f=>[...new Set(models.map(f).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b)));
+  fillSelect('filterType',uniq(m=>m.aircraftType),'All aircraft types',saved.type);
+  fillSelect('filterScale',uniq(m=>m.scale),'All scales',saved.scale);
+  fillSelect('filterCountry',uniq(m=>m.country),'All countries',saved.country);
+  fillSelect('filterModelMfr',uniq(m=>m.modelManufacturer),'All model makers',saved.mfr);
+  fillSelect('filterTag',[...new Set(models.flatMap(m=>m.tags||[]))].sort(),'All tags',saved.tag);
+}
+['searchInput','filterType','filterScale','filterCountry','filterModelMfr','filterTag','sortBy'].forEach(id=>document.getElementById(id).addEventListener(id==='searchInput'?'input':'change',renderLibrary));
+function clearFilters(){
+  ['searchInput','filterType','filterScale','filterCountry','filterModelMfr','filterTag'].forEach(id=>document.getElementById(id).value='');
+  renderLibrary();
+}
+function filteredModels(){
+  const q=document.getElementById('searchInput').value.trim().toLowerCase(), fType=document.getElementById('filterType').value,
+  fScale=document.getElementById('filterScale').value,fCountry=document.getElementById('filterCountry').value,
+  fMfr=document.getElementById('filterModelMfr').value,fTag=document.getElementById('filterTag').value,sort=document.getElementById('sortBy').value;
+  let arr=models.filter(m=>{
+    if(fType&&m.aircraftType!==fType)return false;if(fScale&&m.scale!==fScale)return false;if(fCountry&&m.country!==fCountry)return false;
+    if(fMfr&&m.modelManufacturer!==fMfr)return false;if(fTag&&!(m.tags||[]).includes(fTag))return false;
+    if(q){
+      const hay=[m.name,m.aircraftType,m.aircraftManufacturer,m.country,m.modelManufacturer,m.scale,m.decalType,m.registration,m.operator,m.era,m.condition,m.notes,...(m.tags||[]),...Object.values(m.custom||{})].join(' ').toLowerCase();
+      if(!hay.includes(q))return false;
+    } return true;
+  });
+  const cmp={
+    'added-desc':(a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''),
+    'added-asc':(a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''),
+    'name-asc':(a,b)=>(a.name||'').localeCompare(b.name||''),
+    'name-desc':(a,b)=>(b.name||'').localeCompare(a.name||''),
+    'value-desc':(a,b)=>(b.currentValue||0)-(a.currentValue||0),
+    'value-asc':(a,b)=>(a.currentValue||0)-(b.currentValue||0),
+    'scale-asc':(a,b)=>(a.scale||'').localeCompare(b.scale||'')
+  }[sort];return arr.sort(cmp);
+}
+function renderLibrary(){
+  const arr=filteredModels();
+  document.getElementById('libraryCount').textContent=`Showing ${arr.length} of ${models.length} model${models.length===1?'':'s'}`;
+  document.getElementById('libraryValue').textContent=arr.length?`Visible value: ${money(arr.reduce((a,m)=>a+(Number(m.currentValue)||0),0))}`:'';
+  const grid=document.getElementById('modelsGrid');
+  if(!arr.length){grid.innerHTML='<div class="card empty" style="grid-column:1/-1">No models match your filters.</div>';return}
+  grid.innerHTML=arr.map(m=>`
+    <article class="model-card">
+      ${m.photo?`<img class="model-img" src="${m.photo}" alt="${esc(m.name)}">`:`<div class="model-img-placeholder">✈️</div>`}
+      <div class="model-body">
+        <div class="model-title">${esc(m.name)}</div>
+        <div class="meta">${esc([m.aircraftManufacturer,m.country].filter(Boolean).join(' • '))}</div>
+        <div class="chips">${[m.aircraftType,m.scale,m.modelManufacturer,...(m.tags||[]).slice(0,2)].filter(Boolean).map(x=>`<span class="chip">${esc(x)}</span>`).join('')}</div>
+        <div class="model-foot">
+          <span class="price">${m.currentValue?money(m.currentValue):''}</span>
+          <div class="rowbuttons">
+            <button class="btn small" onclick="showDetails('${m.id}')">View</button>
+            <button class="btn small" onclick="editModel('${m.id}')">Edit</button>
+          </div>
+        </div>
+      </div>
+    </article>`).join('');
+}
+function showDetails(id){
+  const m=models.find(x=>x.id===id);if(!m)return;
+  document.getElementById('detailTitle').textContent=m.name;
+  const pairs=[
+    ['Aircraft Type',m.aircraftType],['Aircraft Manufacturer',m.aircraftManufacturer],['Country of Origin',m.country],['Era',m.era],
+    ['Model Manufacturer',m.modelManufacturer],['Scale',m.scale],['Decal / Marking Type',m.decalType],['Registration',m.registration],
+    ['Airline / Operator / Unit',m.operator],['Condition',m.condition],['Purchase Price',m.purchasePrice?money(m.purchasePrice):''],
+    ['Estimated Value',m.currentValue?money(m.currentValue):''],['Date Acquired',m.dateAcquired],['Tags',(m.tags||[]).join(', ')]
+  ];
+  settings.customFields.forEach(f=>pairs.push([f.name,(m.custom||{})[f.id]||'']));
+  const body=document.getElementById('detailBody');
+  body.innerHTML=`${m.photo?`<img src="${m.photo}" alt="${esc(m.name)}" style="width:100%;max-height:380px;object-fit:contain;background:#f1f4f7;border-radius:12px;margin-bottom:14px">`:''}
+    <div class="detail-grid">${pairs.filter(x=>x[1]!==''&&x[1]!=null).map(([a,b])=>`<div><b>${esc(a)}</b>${esc(b)}</div>`).join('')}</div>
+    ${m.notes?`<div style="margin-top:16px"><b>Notes</b><p style="white-space:pre-wrap">${esc(m.notes)}</p></div>`:''}
+    <div class="actions" style="margin-top:18px"><button class="btn primary" onclick="document.getElementById('detailDialog').close();editModel('${m.id}')">Edit</button><button class="btn danger" onclick="document.getElementById('detailDialog').close();deleteModel('${m.id}')">Delete</button></div>`;
+  document.getElementById('detailDialog').showModal();
+}
+
+function renderSettings(){
+  const configs=[['types','typesPills'],['scales','scalesPills'],['modelManufacturers','mfrPills'],['decalTypes','decalPills'],['conditions','conditionPills']];
+  configs.forEach(([key,id])=>document.getElementById(id).innerHTML=settings[key].map((x,i)=>`<span class="tagpill">${esc(x)} <button onclick="removeListItem('${key}',${i})">×</button></span>`).join(''));
+  const c=document.getElementById('customFieldsList');
+  c.innerHTML=settings.customFields.length?settings.customFields.map((f,i)=>`<div class="switch-row"><div><b>${esc(f.name)}</b><div class="muted" style="font-size:12px">${esc(f.type)}${f.options?.length?' • '+esc(f.options.join(', ')):''}</div></div><button class="btn small danger" onclick="removeCustomField(${i})">Remove</button></div>`).join(''):'<div class="empty">No custom fields yet.</div>';
+}
+async function addListItem(key,inputId){
+  const el=document.getElementById(inputId),v=el.value.trim();if(!v)return;
+  if(!settings[key].some(x=>x.toLowerCase()===v.toLowerCase()))settings[key].push(v);
+  settings[key].sort((a,b)=>a.localeCompare(b));el.value='';await saveSettings();renderAll();toast('List updated');
+}
+async function removeListItem(key,index){
+  settings[key].splice(index,1);await saveSettings();renderAll();toast('List updated');
+}
+async function addCustomField(){
+  const name=document.getElementById('cfName').value.trim(),type=document.getElementById('cfType').value;
+  if(!name){toast('Enter a field name');return}
+  const options=type==='select'?document.getElementById('cfOptions').value.split(',').map(x=>x.trim()).filter(Boolean):[];
+  settings.customFields.push({id:'cf_'+uid().replace(/-/g,''),name,type,options});
+  document.getElementById('cfName').value='';document.getElementById('cfOptions').value='';await saveSettings();renderAll();toast('Custom field added');
+}
+async function removeCustomField(index){
+  const f=settings.customFields[index];if(!confirm(`Remove custom field "${f.name}"? Existing saved values for this field will no longer be shown.`))return;
+  settings.customFields.splice(index,1);await saveSettings();renderAll();toast('Custom field removed');
+}
+
+function downloadBlob(content,type,filename){
+  const blob=new Blob([content],{type}),url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download=filename;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function exportBackup(){
+  const payload={app:'Model Aircraft Library',version:1,exportedAt:new Date().toISOString(),settings,models};
+  downloadBlob(JSON.stringify(payload,null,2),'application/json',`model-aircraft-backup-${new Date().toISOString().slice(0,10)}.json`);
+  toast('Backup exported');
+}
+document.getElementById('importFile').addEventListener('change',async e=>{
+  const file=e.target.files[0];if(!file)return;
+  try{
+    const data=JSON.parse(await file.text());
+    if(!Array.isArray(data.models))throw new Error('Invalid backup');
+    if(!confirm(`Import ${data.models.length} models? This will replace the collection currently stored here.`)){e.target.value='';return}
+    await storeClear(MODEL_STORE);
+    for(const m of data.models) await storePut(MODEL_STORE,m);
+    if(data.settings){settings={...defaults,...data.settings};await saveSettings()}
+    await loadModels();toast('Backup imported successfully');goPage('dashboard');
+  }catch(err){alert('That file does not appear to be a valid Model Aircraft Library backup.')}
+  e.target.value='';
+});
+function exportCSV(){
+  const customCols=settings.customFields.map(f=>f.name);
+  const headers=['Name','Aircraft Type','Aircraft Manufacturer','Country','Era','Model Manufacturer','Scale','Decal Type','Registration','Operator / Unit','Condition','Purchase Price','Current Value','Date Acquired','Tags','Notes',...customCols];
+  const rows=models.map(m=>[
+    m.name,m.aircraftType,m.aircraftManufacturer,m.country,m.era,m.modelManufacturer,m.scale,m.decalType,m.registration,m.operator,m.condition,
+    m.purchasePrice,m.currentValue,m.dateAcquired,(m.tags||[]).join('; '),m.notes,...settings.customFields.map(f=>(m.custom||{})[f.id]||'')
+  ]);
+  const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  downloadBlob(csv,'text/csv;charset=utf-8',`model-aircraft-collection-${new Date().toISOString().slice(0,10)}.csv`);
+  toast('CSV exported');
+}
+async function deleteAllModels(){
+  if(!confirm('Delete the ENTIRE collection from this browser? This cannot be undone unless you have exported a backup.'))return;
+  if(!confirm('Final confirmation: permanently delete every model?'))return;
+  await storeClear(MODEL_STORE);await loadModels();toast('Collection deleted');
+}
+
+(async function init(){
+  try{
+    await openDB();
+    storageMode='idb';
+  }catch(err){
+    console.warn('IndexedDB unavailable; using fallback storage.',err);
+    db=null;
+    storageMode='local';
+    try{
+      localStorage.setItem('MAL_storage_test','1');
+      localStorage.removeItem('MAL_storage_test');
+    }catch(e){
+      storageMode='memory';
+    }
+  }
+
+  try{
+    await loadSettings();
+    await loadModels();
+    document.getElementById('dbStatus').textContent =
+      storageMode==='idb' ? 'Ready — IndexedDB' :
+      storageMode==='local' ? 'Ready — Browser storage' :
+      'Temporary session only';
+    const initial=(location.hash||'#dashboard').slice(1);
+    if(document.getElementById(initial)?.classList.contains('page')) goPage(initial);
+  }catch(err){
+    console.error(err);
+    settings={...defaults};
+    models=[];
+    renderAll();
+    document.getElementById('dbStatus').textContent='Temporary session only';
+  }
+})();
+</script>
+
+<script>
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(err => console.warn('Service worker registration failed:', err));
+  });
+}
+</script>
+
+</body>
+</html>

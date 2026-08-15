@@ -331,8 +331,11 @@
       <div id="syncConnected" class="hidden">
         <div class="actions">
           <button class="btn primary" type="button" onclick="syncNow(true)">Sync Now</button>
+          <button class="btn secondary" type="button" onclick="downloadCloudCopy()">Download Cloud Copy</button>
+          <button class="btn" type="button" onclick="uploadLocalCopy()">Upload This Device</button>
           <button class="btn" type="button" onclick="syncSignOut()">Sign Out</button>
         </div>
+        <p class="muted" style="font-size:12px;margin:10px 0 0"><b>Recovery:</b> Download replaces this device with the cloud copy. Upload replaces the cloud copy with this device. Export a backup first if either copy contains important unique changes.</p>
         <div class="muted" id="syncLast" style="font-size:12px;margin-top:10px"></div>
       </div>
     </div>
@@ -556,6 +559,33 @@ async function syncNow(showResult=false){
     const when=new Date();localStorage.setItem('MAL_last_sync',when.toISOString());setSyncState(`Synced as ${config.email}`,'ok');
     document.getElementById('syncLast').textContent='Last synced '+when.toLocaleString();if(showResult)toast('Collection synced');
   }catch(err){console.error(err);setSyncState('Sync error — local copy is safe','bad');if(showResult)alert('Sync failed: '+err.message)}finally{syncBusy=false}
+}
+async function syncApi(){
+  const auth=await validSyncSession();if(!auth)throw new Error('Please sign in again');
+  const {config,session}=auth,userId=session.user?.id;if(!userId)throw new Error('Session is missing an account ID');
+  return {config,userId,headers:{apikey:config.key,Authorization:'Bearer '+session.access_token,'Content-Type':'application/json'}};
+}
+async function downloadCloudCopy(){
+  if(!navigator.onLine){toast('Connect to the internet first');return}
+  try{
+    setSyncState('Checking cloud copy…','warn');const {config,userId,headers}=await syncApi();
+    const response=await fetch(`${config.url}/rest/v1/aircraft_library_sync?select=payload,updated_at&user_id=eq.${encodeURIComponent(userId)}`,{headers});
+    if(!response.ok)throw new Error((await response.json().catch(()=>({}))).message||'Could not read cloud copy');
+    const rows=await response.json();if(!rows.length)throw new Error('No cloud copy was found for this signed-in account');
+    const payload=rows[0].payload||{},count=Array.isArray(payload.models)?payload.models.length:0;
+    if(!confirm(`Download ${count} model${count===1?'':'s'} from the cloud and replace this device's local collection?`)){renderSyncUI();return}
+    await persistSyncPayload(payload);setSyncState(`Downloaded ${count} model${count===1?'':'s'} from cloud`,'ok');toast(`Downloaded ${count} cloud model${count===1?'':'s'}`);goPage('dashboard');
+  }catch(err){setSyncState('Cloud download failed','bad');alert('Download failed: '+err.message)}
+}
+async function uploadLocalCopy(){
+  if(!navigator.onLine){toast('Connect to the internet first');return}
+  if(!confirm(`Replace the cloud copy with the ${models.length} model${models.length===1?'':'s'} stored on this device?`))return;
+  try{
+    setSyncState('Uploading this device…','warn');const {config,userId,headers}=await syncApi();
+    const payload={version:2,settings,models},response=await fetch(config.url+'/rest/v1/aircraft_library_sync',{method:'POST',headers:{...headers,Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({user_id:userId,payload,updated_at:new Date().toISOString()})});
+    if(!response.ok)throw new Error((await response.json().catch(()=>({}))).message||'Could not upload local copy');
+    setSyncState(`Uploaded ${models.length} model${models.length===1?'':'s'} to cloud`,'ok');toast('This device was uploaded');
+  }catch(err){setSyncState('Cloud upload failed','bad');alert('Upload failed: '+err.message)}
 }
 function scheduleSync(){clearTimeout(syncTimer);if(getSyncSession()&&navigator.onLine)syncTimer=setTimeout(()=>syncNow(false),1200)}
 

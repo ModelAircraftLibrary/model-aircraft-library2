@@ -571,8 +571,7 @@ async function syncNow(showResult=false,pullOnly=false){
     const rows=await get.json(),local={version:2,settings,models};
     const merged=rows.length?mergeSyncPayload(local,rows[0].payload||{}):local;
     if(rows.length)await persistSyncPayload(merged);
-    const hasPendingChanges=localStorage.getItem('MAL_sync_dirty')==='1';
-    if(!pullOnly||hasPendingChanges){
+    if(!pullOnly){
       await writeCloudPayload(config,userId,headers,merged);
       localStorage.removeItem('MAL_sync_dirty');
     }

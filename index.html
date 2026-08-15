@@ -568,7 +568,7 @@ async function persistSyncPayload(payload){
   await storeClear(MODEL_STORE);for(const model of payload.models||[])await storePut(MODEL_STORE,model);
   settings={...defaults,...(payload.settings||{})};await saveSettings(true);models=await storeGetAll(MODEL_STORE);renderAll();
 }
-async function syncNow(showResult=false){
+async function syncNow(showResult=false,pullOnly=false){
   if(syncBusy||!navigator.onLine)return;const auth=await validSyncSession().catch(()=>null);if(!auth){renderSyncUI();return}
   syncBusy=true;setSyncState('Syncing…','warn');
   try{
@@ -579,7 +579,11 @@ async function syncNow(showResult=false){
     const rows=await get.json(),local={version:2,settings,models};
     const merged=rows.length?mergeSyncPayload(local,rows[0].payload||{}):local;
     if(rows.length)await persistSyncPayload(merged);
-    await writeCloudPayload(config,userId,headers,merged);
+    const hasPendingChanges=localStorage.getItem('MAL_sync_dirty')==='1';
+    if(!pullOnly||hasPendingChanges){
+      await writeCloudPayload(config,userId,headers,merged);
+      localStorage.removeItem('MAL_sync_dirty');
+    }
     const syncedQty=(merged.models||[]).reduce((total,model)=>total+qty(model),0);
     const when=new Date();localStorage.setItem('MAL_last_sync',when.toISOString());setSyncState(`Synced ${syncedQty} model${syncedQty===1?'':'s'} as ${config.email}`,'ok');
     document.getElementById('syncLast').textContent='Last synced '+when.toLocaleString();if(showResult)toast('Collection synced');
@@ -599,7 +603,7 @@ async function downloadCloudCopy(){
     const rows=await response.json();if(!rows.length)throw new Error('No cloud copy was found for this signed-in account');
     const payload=rows[0].payload||{},count=(payload.models||[]).reduce((total,model)=>total+qty(model),0);
     if(!confirm(`Download ${count} model${count===1?'':'s'} from the cloud and replace this device's local collection?`)){renderSyncUI();return}
-    await persistSyncPayload(payload);setSyncState(`Downloaded ${count} model${count===1?'':'s'} from cloud`,'ok');toast(`Downloaded ${count} cloud model${count===1?'':'s'}`);goPage('dashboard');
+    await persistSyncPayload(payload);localStorage.removeItem('MAL_sync_dirty');setSyncState(`Downloaded ${count} model${count===1?'':'s'} from cloud`,'ok');toast(`Downloaded ${count} cloud model${count===1?'':'s'}`);goPage('dashboard');
   }catch(err){setSyncState('Cloud download failed','bad');alert('Download failed: '+err.message)}
 }
 async function uploadLocalCopy(){
@@ -611,10 +615,13 @@ async function uploadLocalCopy(){
     const payload={version:2,settings,models},saved=await writeCloudPayload(config,userId,headers,payload);
     const verifiedQty=(saved.payload?.models||[]).reduce((total,model)=>total+qty(model),0);
     if(verifiedQty!==localQty)throw new Error(`Cloud verification expected ${localQty} models but read back ${verifiedQty}`);
-    setSyncState(`Verified ${verifiedQty} model${verifiedQty===1?'':'s'} in cloud`,'ok');toast('Cloud upload verified');
+    localStorage.removeItem('MAL_sync_dirty');setSyncState(`Verified ${verifiedQty} model${verifiedQty===1?'':'s'} in cloud`,'ok');toast('Cloud upload verified');
   }catch(err){setSyncState('Cloud upload failed','bad');alert('Upload failed: '+err.message)}
 }
-function scheduleSync(){clearTimeout(syncTimer);if(getSyncSession()&&navigator.onLine)syncTimer=setTimeout(()=>syncNow(false),1200)}
+function scheduleSync(){
+  localStorage.setItem('MAL_sync_dirty','1');clearTimeout(syncTimer);
+  if(getSyncSession()&&navigator.onLine)syncTimer=setTimeout(()=>syncNow(false,false),1200);
+}
 
 function esc(v=''){return String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));}
 function money(n){return new Intl.NumberFormat('en-CA',{style:'currency',currency:settings.currency||'CAD',maximumFractionDigits:0}).format(Number(n)||0)}
@@ -966,11 +973,11 @@ async function deleteAllModels(){
     const initial=(location.hash||'#dashboard').slice(1);
     if(document.getElementById(initial)?.classList.contains('page')) goPage(initial);
     renderSyncUI();
-    window.addEventListener('online',()=>{renderSyncUI();syncNow(false)});
+    window.addEventListener('online',()=>{renderSyncUI();syncNow(false,true)});
     window.addEventListener('offline',renderSyncUI);
-    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow(false)});
-    setInterval(()=>{if(document.visibilityState==='visible'&&navigator.onLine&&getSyncSession())syncNow(false)},15000);
-    if(getSyncSession()&&navigator.onLine)syncNow(false);
+    document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow(false,true)});
+    setInterval(()=>{if(document.visibilityState==='visible'&&navigator.onLine&&getSyncSession())syncNow(false,true)},15000);
+    if(getSyncSession()&&navigator.onLine)syncNow(false,true);
   }catch(err){
     console.error(err);
     settings={...defaults};
